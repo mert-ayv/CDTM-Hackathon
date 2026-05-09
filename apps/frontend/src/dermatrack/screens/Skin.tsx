@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createFlareObservation, DEMO_USER_ID } from "../api";
 import { BodyMap } from "../body";
 import type { BodySide, RegionAffected } from "../data";
 import { useT } from "../i18n";
@@ -103,6 +104,7 @@ export function Skin({ data, lang }: ScreenProps) {
   const [photosByRegion, setPhotosByRegion] = useState<Record<string, RegionPhoto[]>>({});
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [logEntries, setLogEntries] = useState<SkinLogEntry[]>([]);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "backend" | "local">("idle");
   const [symptomsByRegion, setSymptomsByRegion] = useState<Record<string, SymptomValues>>(() => {
     const initial: Record<string, SymptomValues> = {};
     data.today.regions.forEach((region) => {
@@ -220,22 +222,44 @@ export function Skin({ data, lang }: ScreenProps) {
     }));
   };
 
-  const saveCurrentEntry = () => {
+  const saveCurrentEntry = async () => {
     if (!selectedRegion || !selectedSide) return;
     const createdAt = new Date();
+    const entry: SkinLogEntry = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${createdAt.getTime()}-${selectedRegion}`,
+      regionId: selectedRegion,
+      regionLabel: selectedLabel,
+      side: selectedSide,
+      values: { ...selectedValues },
+      photoCount: selectedPhotos.length,
+      createdAt,
+    };
+
     setLogEntries((current) => [
-      {
-        id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${createdAt.getTime()}-${selectedRegion}`,
-        regionId: selectedRegion,
-        regionLabel: selectedLabel,
-        side: selectedSide,
-        values: { ...selectedValues },
-        photoCount: selectedPhotos.length,
-        createdAt,
-      },
+      entry,
       ...current,
     ]);
     setIsLogOpen(true);
+    setSaveState("saving");
+
+    const avg = averageSeverity(selectedValues);
+    const result = await createFlareObservation({
+      userId: DEMO_USER_ID,
+      observedAt: createdAt.toISOString(),
+      bodyRegionId: selectedRegion,
+      side: selectedSide,
+      intensity: Math.min(5, Math.max(1, Math.round(avg / 2))) as 1 | 2 | 3 | 4 | 5,
+      itchiness: selectedValues.itch,
+      dryness: selectedValues.dryness,
+      redness: selectedValues.redness,
+      scorradTotal: data.today.scorad,
+      notes:
+        selectedPhotos.length > 0
+          ? `Saved from body map with ${selectedPhotos.length} photo(s).`
+          : "Saved from body map.",
+    });
+
+    setSaveState(result.source === "backend" ? "backend" : "local");
   };
 
   const symptomRows: Array<{ id: SymptomId; label: string; color: string }> = [
@@ -340,6 +364,23 @@ export function Skin({ data, lang }: ScreenProps) {
                   {lang === "de" ? "Ausgewählte Region" : "Selected region"}
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{selectedLabel}</div>
+                {saveState !== "idle" && (
+                  <div style={{ marginTop: 6 }}>
+                    <span className={"pill " + (saveState === "backend" ? "sage" : saveState === "local" ? "warn" : "neutral")}>
+                      {saveState === "saving"
+                        ? lang === "de"
+                          ? "Synchronisiert..."
+                          : "Syncing..."
+                        : saveState === "backend"
+                        ? lang === "de"
+                          ? "Backend gespeichert"
+                          : "Saved to backend"
+                        : lang === "de"
+                        ? "Demo-Fallback gespeichert"
+                        : "Saved to demo fallback"}
+                    </span>
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="icon-btn" style={{ width: 36, height: 36 }} onClick={triggerPhotoUpload}>
@@ -462,7 +503,13 @@ export function Skin({ data, lang }: ScreenProps) {
                 }}
               >
                 <Icon.plus size={16} color="var(--bg)" />
-                {lang === "de" ? "Eintrag speichern" : "Save entry"}
+                {saveState === "saving"
+                  ? lang === "de"
+                    ? "Speichert..."
+                    : "Saving..."
+                  : lang === "de"
+                  ? "Eintrag speichern"
+                  : "Save entry"}
               </button>
             </div>
           </div>

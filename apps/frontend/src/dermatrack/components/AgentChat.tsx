@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ApiStatus } from "../api";
 import type { DermaTrackData, Lang } from "../data";
 import { fmtTime } from "../i18n";
 import { Icon } from "../icons";
@@ -24,7 +25,7 @@ export function AgentChat({
   showScope = true,
   showSuggestions = true,
 }: AgentChatProps) {
-  const { data, lang, messages, send, thinking } = useAgent();
+  const { data, lang, messages, send, thinking, apiStatus } = useAgent();
   const [input, setInput] = useState("");
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +81,7 @@ export function AgentChat({
     >
       {showScope && (
         <div style={{ flexShrink: 0 }}>
-          <ScopeStrip data={data} lang={lang} />
+          <ScopeStrip data={data} lang={lang} apiStatus={apiStatus} />
         </div>
       )}
 
@@ -172,7 +173,7 @@ interface PromptDef {
   query: string;
 }
 
-function ScopeStrip({ data, lang }: { data: DermaTrackData; lang: Lang }) {
+function ScopeStrip({ data, lang, apiStatus }: { data: DermaTrackData; lang: Lang; apiStatus: ApiStatus }) {
   const meals = data.days.reduce((s, d) => s + d.foods.length, 0);
   const photos = data.days.filter((d) => d.hasPhoto).length;
   const items: { label: string; value: string }[] = [
@@ -220,7 +221,13 @@ function ScopeStrip({ data, lang }: { data: DermaTrackData; lang: Lang }) {
             boxShadow: "0 0 0 3px color-mix(in oklch, var(--good) 25%, transparent)",
           }}
         />
-        {lang === "de" ? "Kontext geladen" : "Context loaded"}
+        {apiStatus.mode === "live"
+          ? lang === "de"
+            ? "Live Backend"
+            : "Live backend"
+          : lang === "de"
+          ? "Demo Kontext"
+          : "Demo context"}
       </span>
       <span style={{ width: 1, height: 14, background: "var(--line)" }} />
       {items.map((it, i) => (

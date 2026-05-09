@@ -1,9 +1,23 @@
+import {
+  createAgentReceipt,
+  createDiaryEntry,
+  createFlareObservation,
+  createTreatmentApplication,
+  DEMO_USER_ID,
+} from "../api";
 import { MiniSpark, RankedBars, RiskGauge, SCORADChart } from "../charts";
 import type { DermaTrackData, Lang } from "../data";
 import { Icon } from "../icons";
 import type { Route } from "../shell";
 import type { ChatMessage } from "./AgentChat";
-import { ConfirmCard, LetterPreviewArtifact, MealLoggedArtifact, ReminderArtifact } from "./AgentArtifacts";
+import {
+  ConfirmCard,
+  FlareLoggedArtifact,
+  LetterPreviewArtifact,
+  MealLoggedArtifact,
+  ReminderArtifact,
+  SyncReceipt,
+} from "./AgentArtifacts";
 
 const newId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -249,6 +263,101 @@ export function computeReply(
   const q = query.toLowerCase();
   const ts = new Date();
 
+  if (
+    (q.includes("pasta") || q.includes("cheese") || q.includes("käse") || q.includes("ate") || q.includes("gegessen")) &&
+    (q.includes("elbow") || q.includes("ellen") || q.includes("itch") || q.includes("juck"))
+  ) {
+    const foods = ["Pasta", "Aged cheese"];
+    return {
+      id: newId(),
+      role: "agent",
+      ts,
+      text:
+        lang === "de"
+          ? `Ich erkenne zwei Signale: Mahlzeit mit möglichen Triggern und akuter Juckreiz an der linken Ellenbeuge. Ich kann beides als zusammenhängendes Ereignis speichern und danach die Trigger-Analyse aktualisieren.`
+          : `I see two signals: a meal with likely triggers and acute itch on the left elbow flexure. I can save both as one linked event and refresh the trigger analysis.`,
+      widget: (
+        <ConfirmCard
+          lang={lang}
+          onConfirm={() =>
+            Promise.all([
+              createDiaryEntry({
+                userId: DEMO_USER_ID,
+                occurredAt: new Date().toISOString(),
+                food: [
+                  { name: "Pasta", mealType: "lunch", triggerCategories: ["gluten"] },
+                  { name: "Aged cheese", mealType: "lunch", triggerCategories: ["dairy", "histamine"] },
+                ],
+                stress: { level: 4, source: "agent-note" },
+                activeRashes: [
+                  {
+                    bodyRegionId: "arm-l-flex",
+                    side: "front",
+                    itchiness: 6.5,
+                    dryness: 5.2,
+                    redness: 5.8,
+                    active: true,
+                    notes: "Linked by Derma Agent: lunch + itch event.",
+                  },
+                ],
+                notes: "Agent-linked food and flare event.",
+              }),
+              createFlareObservation({
+                userId: DEMO_USER_ID,
+                observedAt: new Date().toISOString(),
+                bodyRegionId: "arm-l-flex",
+                side: "front",
+                intensity: 3,
+                itchiness: 6.5,
+                dryness: 5.2,
+                redness: 5.8,
+                scorradTotal: data.today.scorad,
+                notes: "Linked by Derma Agent to pasta + aged cheese lunch.",
+              }),
+            ])
+          }
+          proposal={{
+            title: lang === "de" ? "2 Signale speichern" : "Save 2 linked signals",
+            summary:
+              lang === "de"
+                ? "Mittagessen + linker Ellenbogen · Gluten, Milch, Histamin · Trigger-Modell aktualisieren"
+                : "Lunch + left elbow · gluten, dairy, histamine · refresh trigger model",
+            confirmLabel: lang === "de" ? "Speichern & analysieren" : "Save & analyze",
+            icon: <Icon.sparkle size={16} color="var(--sage-d)" />,
+            accent: "var(--sage)",
+          }}
+          success={{
+            title: lang === "de" ? "Ereignis gespeichert" : "Linked event saved",
+            artifact: (
+              <div style={{ display: "grid", gap: 10 }}>
+                <MealLoggedArtifact
+                  mealLabel={lang === "de" ? "Mittagessen · jetzt" : "Lunch · now"}
+                  foods={foods}
+                  flagged={["Aged cheese"]}
+                  lang={lang}
+                  onRoute={onRoute}
+                />
+                <FlareLoggedArtifact
+                  region={lang === "de" ? "Ellenbeuge links" : "Left elbow flexure"}
+                  severity={6.5}
+                  lang={lang}
+                  onRoute={onRoute}
+                />
+                <SyncReceipt
+                  label={lang === "de" ? "Trigger-Analyse aktualisiert" : "Trigger analysis refreshed"}
+                  detail={lang === "de" ? "Lag-Fenster 12-36h · Histamin-Konfidenz +4%" : "12-36h lag window · histamine confidence +4%"}
+                  lang={lang}
+                  onRoute={onRoute}
+                  route="triggers"
+                />
+              </div>
+            ),
+          }}
+        />
+      ),
+    };
+  }
+
   // Pollen / plan / antihistamine → ConfirmCard for setReminder
   if (
     q.includes("pollen") ||
@@ -324,6 +433,22 @@ I can set a reminder for 21:00.`,
           </div>
           <ConfirmCard
             lang={lang}
+            onConfirm={() =>
+              Promise.all([
+                createTreatmentApplication({
+                  userId: DEMO_USER_ID,
+                  medicationId: "antihist",
+                  appliedAt: new Date(new Date().setHours(21, 0, 0, 0)).toISOString(),
+                  amount: "10 mg",
+                  notes: "Agent-created pollen peak reminder.",
+                }),
+                createAgentReceipt({
+                  userId: DEMO_USER_ID,
+                  kind: "reminder.created",
+                  payload: { medication: "Cetirizine 10 mg", time: "21:00", reason: "pollen peak" },
+                }),
+              ])
+            }
             proposal={{
               title:
                 lang === "de"
@@ -382,6 +507,19 @@ Want me to log it as lunch at 12:30?`,
       widget: (
         <ConfirmCard
           lang={lang}
+          onConfirm={() =>
+            createDiaryEntry({
+              userId: DEMO_USER_ID,
+              occurredAt: new Date().toISOString(),
+              food: [
+                { name: "Pasta", mealType: "lunch", triggerCategories: ["gluten"] },
+                { name: "Tomato sauce", mealType: "lunch", triggerCategories: ["histamine", "nightshades"] },
+                { name: "Parmesan", mealType: "lunch", triggerCategories: ["dairy", "histamine"] },
+                { name: "Basil", mealType: "lunch", triggerCategories: [] },
+              ],
+              notes: "Agent-confirmed lunch from photo.",
+            })
+          }
           proposal={{
             title:
               lang === "de"
@@ -549,6 +687,17 @@ Want me to log it as lunch at 12:30?`,
           <LetterPreviewArtifact data={data} lang={lang} onRoute={onRoute} />
           <ConfirmCard
             lang={lang}
+            onConfirm={() =>
+              createAgentReceipt({
+                userId: DEMO_USER_ID,
+                kind: "doctor-letter.sent",
+                payload: {
+                  recipient: "Dr. Lehmann · Praxis Mitte",
+                  transport: "TI-Messenger",
+                  sections: ["scorad", "triggers", "photos", "treatment", "body-map"],
+                },
+              })
+            }
             proposal={{
               title: lang === "de" ? "Brief an Praxis senden" : "Send letter to clinic",
               summary:
@@ -667,27 +816,41 @@ Soll ich einen Vergleich öffnen?`
 
 Want me to open a side-by-side?`,
       widget: (
-        <button
-          onClick={() => onRoute("treatment")}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 14px",
-            borderRadius: 12,
-            background: "var(--ink)",
-            color: "var(--bg)",
-            border: "1px solid var(--ink)",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-            alignSelf: "flex-start",
+        <ConfirmCard
+          lang={lang}
+          onConfirm={() =>
+            createTreatmentApplication({
+              userId: DEMO_USER_ID,
+              medicationId: "mometason",
+              appliedAt: new Date().toISOString(),
+              bodyRegionId: "arm-l-flex",
+              amount: "thin layer",
+              notes: "Agent-confirmed treatment action from efficacy comparison.",
+            })
+          }
+          proposal={{
+            title: lang === "de" ? "Mometason-Anwendung speichern" : "Save mometasone application",
+            summary:
+              lang === "de"
+                ? "Ellenbeuge links · dünne Schicht · Wirkung wird in 24h verglichen"
+                : "Left elbow flexure · thin layer · effect will be compared in 24h",
+            confirmLabel: lang === "de" ? "Behandlung speichern" : "Save treatment",
+            icon: <Icon.pill size={16} color="var(--sage-d)" />,
+            accent: "var(--sage)",
           }}
-        >
-          <Icon.pill size={13} color="var(--bg)" />
-          {lang === "de" ? "Behandlung öffnen" : "Open treatment"}
-          <Icon.arrowRight size={12} color="var(--bg)" />
-        </button>
+          success={{
+            title: lang === "de" ? "Behandlung gespeichert" : "Treatment saved",
+            artifact: (
+              <SyncReceipt
+                label={lang === "de" ? "Mometason · Ellenbeuge links" : "Mometasone · left elbow"}
+                detail={lang === "de" ? "Wirkfenster 24h · Vergleich aktiviert" : "24h effect window · comparison active"}
+                lang={lang}
+                onRoute={onRoute}
+                route="treatment"
+              />
+            ),
+          }}
+        />
       ),
     };
   }

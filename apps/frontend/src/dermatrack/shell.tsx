@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import type { ApiStatus } from "./api";
 import type { Lang } from "./data";
 import { Icon, type IconName } from "./icons";
 
@@ -107,17 +108,32 @@ export interface TopbarProps {
   route: Route;
   lang: Lang;
   onLang: (lang: Lang) => void;
+  onRoute?: (route: Route) => void;
+  apiStatus?: ApiStatus;
 }
 
-export function Topbar({ route, lang, onLang }: TopbarProps) {
+export function Topbar({ route, lang, onLang, onRoute, apiStatus }: TopbarProps) {
   const item = NAV.find((n) => n.id === route);
+  const mode = apiStatus?.mode || "checking";
+  const statusLabel =
+    mode === "live"
+      ? lang === "de"
+        ? "Live Backend"
+        : "Live backend"
+      : mode === "demo"
+      ? lang === "de"
+        ? "Demo Fallback"
+        : "Demo fallback"
+      : lang === "de"
+      ? "Verbinde"
+      : "Connecting";
   return (
     <div className="topbar">
       <div>
         <div className="crumbs">DermaTrack › {item ? item[lang] : ""}</div>
         <h1>{item ? item[lang] : ""}</h1>
       </div>
-      <div className="topbar-search">
+      <button className="topbar-search" onClick={() => onRoute?.("today")}>
         <Icon.sparkle size={14} color="var(--ink-3)" />
         <span>{lang === "de" ? "Frag dein Hautmuster…" : "Ask your skin pattern…"}</span>
         <span
@@ -133,8 +149,39 @@ export function Topbar({ route, lang, onLang }: TopbarProps) {
         >
           ⌘K
         </span>
-      </div>
+      </button>
       <div className="topbar-actions">
+        <div
+          title={apiStatus?.apiBaseUrl}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            height: 34,
+            padding: "0 10px",
+            borderRadius: 10,
+            border: "1px solid var(--line)",
+            background: mode === "live" ? "color-mix(in oklch, var(--sage) 16%, var(--card))" : "var(--card)",
+            color: mode === "live" ? "var(--sage-d)" : "var(--ink-3)",
+            fontSize: 11,
+            fontWeight: 800,
+            fontFamily: "var(--font-mono)",
+            letterSpacing: "0.03em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: mode === "live" ? "var(--good)" : mode === "demo" ? "var(--warn)" : "var(--ink-3)",
+              boxShadow:
+                mode === "live" ? "0 0 0 3px color-mix(in oklch, var(--good) 20%, transparent)" : undefined,
+            }}
+          />
+          {statusLabel}
+        </div>
         <div className="lang-pill">
           <button className={lang === "de" ? "on" : ""} onClick={() => onLang("de")}>
             DE
@@ -143,10 +190,10 @@ export function Topbar({ route, lang, onLang }: TopbarProps) {
             EN
           </button>
         </div>
-        <button className="icon-btn">
+        <button className="icon-btn" onClick={() => onRoute?.("forecast")} title={lang === "de" ? "Risiko-Warnungen" : "Risk alerts"}>
           <Icon.bell size={16} />
         </button>
-        <button className="icon-btn">
+        <button className="icon-btn" onClick={() => onRoute?.("treatment")} title={lang === "de" ? "Behandlung" : "Treatment"}>
           <Icon.settings size={16} />
         </button>
       </div>

@@ -1,4 +1,5 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import { getBackendStatus, type ApiStatus } from "./api";
 import { AgentPalette } from "./components/AgentPalette";
 import { AgentProvider } from "./components/AgentContext";
 import { AgentTrigger } from "./components/AgentTrigger";
@@ -28,16 +29,34 @@ const SCREENS: Record<Route, ComponentType<ScreenProps>> = {
 export function DermaTrackApp() {
   const [route, setRoute] = useHashRoute("today");
   const [lang, setLang] = useState<Lang>("en");
+  const [apiStatus, setApiStatus] = useState<ApiStatus>({
+    mode: "checking",
+    apiBaseUrl: "http://localhost:3000",
+  });
   const Screen = SCREENS[route] || Today;
 
+  useEffect(() => {
+    let active = true;
+    const check = () =>
+      getBackendStatus().then((status) => {
+        if (active) setApiStatus(status);
+      });
+    check();
+    const timer = window.setInterval(check, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   return (
-    <AgentProvider data={DT_DATA} lang={lang} onRoute={setRoute}>
+    <AgentProvider data={DT_DATA} lang={lang} onRoute={setRoute} apiStatus={apiStatus}>
       <div className="app-shell">
         <Sidebar route={route} onRoute={setRoute} lang={lang} />
         <div className="scroll" style={{ height: "100vh" }}>
-          <Topbar route={route} lang={lang} onLang={setLang} />
+          <Topbar route={route} lang={lang} onLang={setLang} onRoute={setRoute} apiStatus={apiStatus} />
           <div className="main">
-            <Screen data={DT_DATA} lang={lang} onRoute={setRoute} />
+            <Screen data={DT_DATA} lang={lang} onRoute={setRoute} apiStatus={apiStatus} />
           </div>
         </div>
       </div>
