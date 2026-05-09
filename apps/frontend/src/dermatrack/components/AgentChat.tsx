@@ -2,8 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { DermaTrackData, Lang } from "../data";
 import { fmtTime } from "../i18n";
 import { Icon } from "../icons";
-import type { Route } from "../shell";
-import { MiniSpark, RankedBars, RiskGauge, SCORADChart } from "../charts";
+import { useAgent } from "./AgentContext";
 
 export interface ChatMessage {
   id: string;
@@ -14,21 +13,19 @@ export interface ChatMessage {
   ts: Date;
 }
 
-const newId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-
 interface AgentChatProps {
-  data: DermaTrackData;
-  lang: Lang;
-  onRoute: (r: Route) => void;
+  variant?: "page" | "palette";
+  showScope?: boolean;
+  showSuggestions?: boolean;
 }
 
-export function AgentChat({ data, lang, onRoute }: AgentChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => seedMessages(data, lang, onRoute));
+export function AgentChat({
+  variant = "page",
+  showScope = true,
+  showSuggestions = true,
+}: AgentChatProps) {
+  const { data, lang, messages, send, thinking } = useAgent();
   const [input, setInput] = useState("");
-  const [thinking, setThinking] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,18 +34,7 @@ export function AgentChat({ data, lang, onRoute }: AgentChatProps) {
     el.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, thinking]);
 
-  const send = (raw: string) => {
-    const text = raw.trim();
-    if (!text) return;
-    setMessages((m) => [...m, { id: newId(), role: "user", text, ts: new Date() }]);
-    setInput("");
-    setThinking(true);
-    window.setTimeout(() => {
-      const reply = computeReply(text, data, lang, onRoute);
-      setMessages((m) => [...m, reply]);
-      setThinking(false);
-    }, 900);
-  };
+  const isPalette = variant === "palette";
 
   const prompts: PromptDef[] = [
     {
@@ -56,12 +42,12 @@ export function AgentChat({ data, lang, onRoute }: AgentChatProps) {
       query: lang === "de" ? "Plan für die Pollen-Spitze" : "Plan for the pollen peak",
     },
     {
-      label: lang === "de" ? "Was hat den schlimmsten Tag ausgelöst?" : "What triggered the worst day?",
-      query: lang === "de" ? "Was hat den schlimmsten Tag ausgelöst?" : "What triggered the worst day?",
+      label: lang === "de" ? "Mittagessen loggen" : "Log my lunch",
+      query: lang === "de" ? "Mittagessen loggen" : "Log my lunch",
     },
     {
-      label: lang === "de" ? "Welche Behandlung wirkt am besten?" : "Which treatment works best?",
-      query: lang === "de" ? "Welche Behandlung wirkt am besten?" : "Which treatment works best?",
+      label: lang === "de" ? "Was hat den schlimmsten Tag ausgelöst?" : "What triggered the worst day?",
+      query: lang === "de" ? "Was hat den schlimmsten Tag ausgelöst?" : "What triggered the worst day?",
     },
     {
       label: lang === "de" ? "Arztbrief vorbereiten" : "Draft doctor letter",
@@ -69,12 +55,39 @@ export function AgentChat({ data, lang, onRoute }: AgentChatProps) {
     },
   ];
 
-  return (
-    <div style={{ maxWidth: 880, margin: "0 auto" }}>
-      <ScopeStrip data={data} lang={lang} />
+  const onSend = () => {
+    send(input);
+    setInput("");
+  };
 
-      {/* Thread */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 28, marginBottom: 24 }}>
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: isPalette ? "100%" : 880,
+        margin: "0 auto",
+        ...(isPalette
+          ? { height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }
+          : {}),
+      }}
+    >
+      {showScope && (
+        <div style={{ flexShrink: 0 }}>
+          <ScopeStrip data={data} lang={lang} />
+        </div>
+      )}
+
+      <div
+        className={isPalette ? "scroll" : undefined}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 28,
+          marginBottom: 18,
+          paddingRight: isPalette ? 4 : 0,
+          ...(isPalette ? { flex: 1, minHeight: 0, overflowY: "auto" } : {}),
+        }}
+      >
         {messages.map((m) => (
           <MessageRow key={m.id} message={m} lang={lang} />
         ))}
@@ -82,76 +95,67 @@ export function AgentChat({ data, lang, onRoute }: AgentChatProps) {
         <div ref={threadRef} />
       </div>
 
-      {/* Suggested prompts */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          marginBottom: 14,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: "var(--ink-3)",
-            textTransform: "uppercase",
-            letterSpacing: "0.10em",
-            alignSelf: "center",
-            marginRight: 6,
-          }}
-        >
-          {lang === "de" ? "Vorschläge" : "Suggested"}
-        </span>
-        {prompts.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => send(p.query)}
+      {showSuggestions && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14, flexShrink: 0 }}>
+          <span
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 12px",
-              borderRadius: 999,
-              border: "1px solid var(--line)",
-              background: "var(--card)",
-              color: "var(--ink-2)",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "var(--shadow-sm)",
+              fontSize: 10,
+              fontWeight: 700,
+              color: "var(--ink-3)",
+              textTransform: "uppercase",
+              letterSpacing: "0.10em",
+              alignSelf: "center",
+              marginRight: 6,
             }}
           >
-            <Icon.sparkle size={11} color="var(--sage-d)" />
-            {p.label}
-          </button>
-        ))}
+            {lang === "de" ? "Vorschläge" : "Suggested"}
+          </span>
+          {prompts.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => send(p.query)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "7px 12px",
+                borderRadius: 999,
+                border: "1px solid var(--line)",
+                background: "var(--card)",
+                color: "var(--ink-2)",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <Icon.sparkle size={11} color="var(--sage-d)" />
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ flexShrink: 0 }}>
+        <Composer input={input} setInput={setInput} onSend={onSend} thinking={thinking} lang={lang} />
       </div>
 
-      {/* Composer */}
-      <Composer
-        input={input}
-        setInput={setInput}
-        onSend={() => send(input)}
-        thinking={thinking}
-        lang={lang}
-      />
-
-      <div
-        style={{
-          marginTop: 12,
-          fontSize: 10,
-          color: "var(--ink-3)",
-          fontFamily: "var(--font-mono)",
-          letterSpacing: "0.06em",
-          textAlign: "center",
-        }}
-      >
-        {lang === "de"
-          ? "Antworten basieren auf deinen letzten 30 Tagen · keine medizinische Beratung · DiGA-konform"
-          : "Replies are based on your last 30 days · not medical advice · DiGA-ready"}
-      </div>
+      {variant === "page" && (
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 10,
+            color: "var(--ink-3)",
+            fontFamily: "var(--font-mono)",
+            letterSpacing: "0.06em",
+            textAlign: "center",
+          }}
+        >
+          {lang === "de"
+            ? "Antworten basieren auf deinen letzten 30 Tagen · keine medizinische Beratung · DiGA-konform"
+            : "Replies are based on your last 30 days · not medical advice · DiGA-ready"}
+        </div>
+      )}
     </div>
   );
 }
@@ -243,7 +247,7 @@ function ScopeStrip({ data, lang }: { data: DermaTrackData; lang: Lang }) {
   );
 }
 
-function MessageRow({ message, lang }: { message: ChatMessage; lang: Lang }) {
+export function MessageRow({ message, lang }: { message: ChatMessage; lang: Lang }) {
   if (message.role === "user") {
     return (
       <div className="dt-msg" style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -355,7 +359,7 @@ function HeroAgentMessage({ message, lang }: { message: ChatMessage; lang: Lang 
   );
 }
 
-function ThinkingRow({ lang }: { lang: Lang }) {
+export function ThinkingRow({ lang }: { lang: Lang }) {
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
       <AgentAvatar size={32} />
@@ -449,6 +453,7 @@ function Composer({ input, setInput, onSend, thinking, lang }: ComposerProps) {
         onKeyDown={(e) => {
           if (e.key === "Enter") onSend();
         }}
+        autoFocus
         style={{
           flex: 1,
           border: "none",
@@ -498,492 +503,4 @@ function Composer({ input, setInput, onSend, thinking, lang }: ComposerProps) {
       </button>
     </div>
   );
-}
-
-// ── seed + reply logic ─────────────────────────────────────
-
-function seedMessages(data: DermaTrackData, lang: Lang, onRoute: (r: Route) => void): ChatMessage[] {
-  const recent7 = data.days.slice(-7);
-  const lastWeekAvg = data.days.slice(-14, -7).reduce((s, d) => s + d.scorad, 0) / 7;
-  const thisWeekAvg = recent7.reduce((s, d) => s + d.scorad, 0) / 7;
-  const delta = thisWeekAvg - lastWeekAvg;
-  const peak = data.forecast.reduce((a, b) => (a.risk > b.risk ? a : b));
-  const peakIdx = data.forecast.indexOf(peak);
-  const peakDay =
-    peakIdx === 0
-      ? lang === "de"
-        ? "morgen"
-        : "tomorrow"
-      : peakIdx === 1
-      ? lang === "de"
-        ? "übermorgen"
-        : "in 2 days"
-      : lang === "de"
-      ? `in ${peakIdx + 1} Tagen`
-      : `in ${peakIdx + 1} days`;
-
-  const briefing =
-    lang === "de"
-      ? `Guten Morgen, Lena.\nDeine Haut erholt sich — und ich habe drei Muster gefunden, die du kennen solltest.`
-      : `Good morning, Lena.\nYour skin is recovering — and I've found three patterns you should know about.`;
-
-  return [
-    {
-      id: newId(),
-      role: "agent",
-      hero: true,
-      ts: new Date(),
-      text: briefing,
-      widget: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* Stat ribbon */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 18,
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-              color: "var(--ink-2)",
-              padding: "10px 14px",
-              border: "1px solid var(--line)",
-              borderRadius: 14,
-              background: "var(--card)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
-            <Stat label="7d ⌀" value={thisWeekAvg.toFixed(1)} />
-            <Stat
-              label={lang === "de" ? "Δ Vorwoche" : "Δ prev"}
-              value={(delta < 0 ? "↓" : "↑") + " " + Math.abs(delta).toFixed(1)}
-              accent={delta < 0 ? "var(--sage-d)" : "var(--clay-d)"}
-            />
-            <Stat
-              label={lang === "de" ? "Spitze" : "Peak"}
-              value={Math.round(peak.risk * 100) + "%"}
-              accent="var(--clay-d)"
-            />
-            <Stat label={lang === "de" ? "Streak" : "streak"} value={`${data.streak}d`} />
-            <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "var(--ink-3)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {lang === "de" ? "Verlauf 14d" : "trend 14d"}
-              </span>
-              <MiniSpark
-                values={data.days.slice(-14).map((d) => d.scorad)}
-                width={70}
-                height={20}
-                color="var(--sage-d)"
-              />
-            </span>
-          </div>
-
-          {/* 3-widget grid: SCORAD chart / triggers / insight */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.5fr 1fr 1fr",
-              gap: 14,
-            }}
-          >
-            <DossierTile
-              eyebrow={lang === "de" ? "01 · Verlauf" : "01 · Trend"}
-              title={lang === "de" ? "SCORAD · 30 Tage" : "SCORAD · 30 days"}
-              caption={`⌀ 22.4 · min 14.6 · max 31.2 · Δ −4.1`}
-            >
-              <SCORADChart days={data.days} height={150} width={460} highlightToday />
-            </DossierTile>
-
-            <DossierTile
-              eyebrow={lang === "de" ? "02 · Auslöser" : "02 · Triggers"}
-              title={lang === "de" ? "Top 3 aktiv" : "Top 3 active"}
-              caption={lang === "de" ? "tippe für volle Analyse" : "tap for full analysis"}
-              onOpen={() => onRoute("triggers")}
-            >
-              <RankedBars items={data.triggers.slice(0, 3)} lang={lang} />
-            </DossierTile>
-
-            <DossierTile
-              eyebrow={lang === "de" ? "03 · Erkenntnis" : "03 · Insight"}
-              title={data.insights[lang][0].title}
-              accent="var(--clay)"
-            >
-              <div className="serif" style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                „{data.insights[lang][0].body}"
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
-                <span className="pill clay">Histamin</span>
-                <span className="pill neutral">+2.4</span>
-                <span className="pill neutral">~24h</span>
-                <span className="pill neutral">3×</span>
-              </div>
-            </DossierTile>
-          </div>
-
-          {/* Closing line */}
-          <div
-            style={{
-              fontSize: 13,
-              lineHeight: 1.55,
-              color: "var(--ink-2)",
-              marginTop: 4,
-            }}
-          >
-            {lang === "de"
-              ? `Birkenpollen-Spitze ${peakDay} (${Math.round(peak.risk * 100)}% Risiko). Soll ich einen Plan vorschlagen?`
-              : `Birch pollen peaks ${peakDay} (${Math.round(peak.risk * 100)}% risk). Want me to draft a plan?`}
-          </div>
-        </div>
-      ),
-    },
-  ];
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <span style={{ display: "inline-flex", flexDirection: "column", gap: 1 }}>
-      <span
-        style={{
-          fontSize: 9,
-          color: "var(--ink-3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-        }}
-      >
-        {label}
-      </span>
-      <span style={{ fontWeight: 700, color: accent || "var(--ink)", fontSize: 13 }}>{value}</span>
-    </span>
-  );
-}
-
-interface DossierTileProps {
-  eyebrow: string;
-  title: string;
-  caption?: string;
-  accent?: string;
-  onOpen?: () => void;
-  children: ReactNode;
-}
-
-function DossierTile({ eyebrow, title, caption, accent, onOpen, children }: DossierTileProps) {
-  return (
-    <div
-      onClick={onOpen}
-      style={{
-        background: "var(--card)",
-        border: "1px solid var(--line)",
-        borderRadius: 16,
-        padding: 14,
-        boxShadow: "var(--shadow-sm)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        cursor: onOpen ? "pointer" : "default",
-        ...(accent ? { borderTop: `3px solid ${accent}` } : {}),
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 8,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 9,
-            fontFamily: "var(--font-mono)",
-            color: "var(--ink-3)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-          }}
-        >
-          {eyebrow}
-        </span>
-        {onOpen && <Icon.arrowRight size={12} color="var(--ink-3)" />}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3, letterSpacing: "-0.01em" }}>{title}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
-      {caption && (
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--ink-3)",
-            fontFamily: "var(--font-mono)",
-            marginTop: 4,
-          }}
-        >
-          {caption}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function computeReply(
-  query: string,
-  data: DermaTrackData,
-  lang: Lang,
-  onRoute: (r: Route) => void,
-): ChatMessage {
-  const q = query.toLowerCase();
-  const ts = new Date();
-
-  if (
-    q.includes("pollen") ||
-    q.includes("birke") ||
-    q.includes("birch") ||
-    q.includes("plan") ||
-    q.includes("antihist")
-  ) {
-    const peak = data.forecast.reduce((a, b) => (a.risk > b.risk ? a : b));
-    return {
-      id: newId(),
-      role: "agent",
-      ts,
-      text:
-        lang === "de"
-          ? `Plan für die Spitze (${Math.round(peak.risk * 100)}% Risiko, Birke ${peak.birch}/4):
-
-1. Heute Abend Cetirizin 10 mg — wirkt über Nacht
-2. Morgen früh Pflegelotion + Mometason an Ellenbeugen
-3. Sport drinnen halten, Lüften erst nach 22 Uhr
-
-Soll ich das in den Tageseintrag übernehmen?`
-          : `Plan for the peak (${Math.round(peak.risk * 100)}% risk, birch ${peak.birch}/4):
-
-1. Tonight: cetirizine 10 mg — works overnight
-2. Morning: emollient + mometasone on elbow flexures
-3. Keep workouts indoors, ventilate after 22:00
-
-Want me to add this to today's entry?`,
-      widget: (
-        <div
-          style={{
-            display: "flex",
-            gap: 14,
-            alignItems: "center",
-            padding: 14,
-            border: "1px solid var(--line)",
-            borderRadius: 14,
-            background: "var(--card)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <div style={{ width: 110, flexShrink: 0 }}>
-            <RiskGauge value={peak.risk} label={lang === "de" ? "Spitze" : "Peak"} size={110} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span className="pill clay" style={{ alignSelf: "flex-start" }}>
-              <Icon.pill size={11} /> Cetirizin · 10 mg
-            </span>
-            <span className="pill sage" style={{ alignSelf: "flex-start" }}>
-              <Icon.droplet size={11} /> {lang === "de" ? "Pflege 2×" : "Emollient 2×"}
-            </span>
-            <button
-              onClick={() => onRoute("forecast")}
-              style={{
-                marginTop: 4,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "var(--sage-d)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textAlign: "left",
-                padding: 0,
-              }}
-            >
-              {lang === "de" ? "Vorhersage öffnen →" : "Open forecast →"}
-            </button>
-          </div>
-        </div>
-      ),
-    };
-  }
-
-  if (q.includes("mittwoch") || q.includes("wednesday") || q.includes("schub") || q.includes("flare") || q.includes("worst") || q.includes("schlimmst")) {
-    const worst = data.days.slice().sort((a, b) => b.scorad - a.scorad)[0];
-    return {
-      id: newId(),
-      role: "agent",
-      ts,
-      text:
-        lang === "de"
-          ? `Den schwersten Tag (SCORAD ${worst.scorad.toFixed(1)}) habe ich auf drei gestapelte Signale zurückgeführt:
-
-· Vorabend: Rotwein + reifer Käse (Histamin)
-· Schlaf nur ${worst.sleepH}h
-· Birkenpollen ${worst.birchPollen}/4
-
-Effektgröße zusammen: ~+5.8 SCORAD ggü. Baseline.`
-          : `I traced the worst day (SCORAD ${worst.scorad.toFixed(1)}) to three signals that stacked:
-
-· Night before: red wine + aged cheese (histamine)
-· Sleep only ${worst.sleepH}h
-· Birch pollen ${worst.birchPollen}/4
-
-Combined effect: ~+5.8 SCORAD vs. baseline.`,
-      widget: (
-        <div
-          style={{
-            padding: 14,
-            border: "1px solid var(--line)",
-            borderRadius: 14,
-            background: "var(--card)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <RankedBars items={data.triggers.slice(0, 3)} lang={lang} />
-        </div>
-      ),
-    };
-  }
-
-  if (
-    q.includes("behandlung") ||
-    q.includes("treatment") ||
-    q.includes("medikament") ||
-    q.includes("salbe") ||
-    q.includes("pflege") ||
-    q.includes("creme")
-  ) {
-    return {
-      id: newId(),
-      role: "agent",
-      ts,
-      text:
-        lang === "de"
-          ? `Aus deinen 30 Tagen: Mometason wirkt am schnellsten — −3.4 SCORAD in 24 h, 6 Anwendungen. Hydrocortison ist langsamer (−2.1) aber gut für leichtere Tage. Pflegelotion allein hält die Baseline.
-
-Soll ich einen Vergleich öffnen?`
-          : `From your 30 days: mometasone works fastest — −3.4 SCORAD in 24 h across 6 applications. Hydrocortisone is slower (−2.1) but good for milder days. Emollient alone holds baseline.
-
-Want me to open a side-by-side?`,
-      widget: (
-        <button
-          onClick={() => onRoute("treatment")}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 14px",
-            borderRadius: 12,
-            background: "var(--ink)",
-            color: "var(--bg)",
-            border: "1px solid var(--ink)",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-            alignSelf: "flex-start",
-          }}
-        >
-          <Icon.pill size={13} color="var(--bg)" />
-          {lang === "de" ? "Behandlung öffnen" : "Open treatment"}
-          <Icon.arrowRight size={12} color="var(--bg)" />
-        </button>
-      ),
-    };
-  }
-
-  if (q.includes("arztbrief") || q.includes("letter") || q.includes("doctor") || q.includes("praxis")) {
-    return {
-      id: newId(),
-      role: "agent",
-      ts,
-      text:
-        lang === "de"
-          ? `Arztbrief vorbereitet — enthält 30-Tage-SCORAD-Verlauf, Top-5-Trigger, Foto-Zeitachse, Behandlungswirkung und Lokalisationskarte. Empfänger: Dr. Lehmann.`
-          : `Doctor letter ready — includes 30-day SCORAD trend, top-5 triggers, photo timeline, treatment effect and body map. Recipient: Dr. Lehmann.`,
-      widget: (
-        <button
-          onClick={() => onRoute("letter")}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 14px",
-            borderRadius: 12,
-            background: "var(--ink)",
-            color: "var(--bg)",
-            border: "1px solid var(--ink)",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-            alignSelf: "flex-start",
-          }}
-        >
-          <Icon.file size={13} color="var(--bg)" />
-          {lang === "de" ? "Vorschau ansehen" : "View preview"}
-          <Icon.arrowRight size={12} color="var(--bg)" />
-        </button>
-      ),
-    };
-  }
-
-  if (
-    q.includes("trigger") ||
-    q.includes("auslös") ||
-    q.includes("wein") ||
-    q.includes("wine") ||
-    q.includes("histam") ||
-    q.includes("essen") ||
-    q.includes("food")
-  ) {
-    return {
-      id: newId(),
-      role: "agent",
-      ts,
-      text:
-        lang === "de"
-          ? `Top-Trigger nach Effektstärke und Konfidenz, sortiert über deine 30 Tage:`
-          : `Top triggers by effect size and confidence over your 30 days:`,
-      widget: (
-        <div
-          style={{
-            padding: 14,
-            border: "1px solid var(--line)",
-            borderRadius: 14,
-            background: "var(--card)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <RankedBars items={data.triggers.slice(0, 4)} lang={lang} />
-          <button
-            onClick={() => onRoute("triggers")}
-            style={{
-              marginTop: 10,
-              fontSize: 11,
-              fontWeight: 700,
-              color: "var(--sage-d)",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-            }}
-          >
-            {lang === "de" ? "Volle Analyse →" : "Full analysis →"}
-          </button>
-        </div>
-      ),
-    };
-  }
-
-  return {
-    id: newId(),
-    role: "agent",
-    ts,
-    text:
-      lang === "de"
-        ? `Ich habe Zugriff auf deinen SCORAD-Verlauf, Mahlzeiten, Trigger, Behandlungen, Foto-KI und Pollen-Vorhersage — frag mich z. B. nach einem konkreten Tag, einem Trigger oder einer Behandlung.`
-        : `I have access to your SCORAD trend, meals, triggers, treatments, photo AI and pollen forecast — try asking about a specific day, trigger, or treatment.`,
-  };
 }

@@ -1,4 +1,7 @@
 import { useState, type ComponentType } from "react";
+import { AgentPalette } from "./components/AgentPalette";
+import { AgentProvider } from "./components/AgentContext";
+import { AgentTrigger } from "./components/AgentTrigger";
 import { DT_DATA, type Lang } from "./data";
 import { Sidebar, Topbar, useHashRoute, type Route } from "./shell";
 import { Today } from "./screens/Today";
@@ -26,14 +29,18 @@ export function DermaTrackApp() {
   const Screen = SCREENS[route] || Today;
 
   return (
-    <div className="app-shell">
-      <Sidebar route={route} onRoute={setRoute} lang={lang} />
-      <div className="scroll" style={{ height: "100vh" }}>
-        <Topbar route={route} lang={lang} onLang={setLang} />
-        <div className="main">
-          <Screen data={DT_DATA} lang={lang} onRoute={setRoute} />
+    <AgentProvider data={DT_DATA} lang={lang} onRoute={setRoute}>
+      <div className="app-shell">
+        <Sidebar route={route} onRoute={setRoute} lang={lang} />
+        <div className="scroll" style={{ height: "100vh" }}>
+          <Topbar route={route} lang={lang} onLang={setLang} />
+          <div className="main">
+            <Screen data={DT_DATA} lang={lang} onRoute={setRoute} />
+          </div>
         </div>
       </div>
-    </div>
+      <AgentTrigger />
+      <AgentPalette />
+    </AgentProvider>
   );
 }
