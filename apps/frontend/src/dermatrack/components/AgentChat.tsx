@@ -53,6 +53,13 @@ export function AgentChat({
       label: lang === "de" ? "Arztbrief vorbereiten" : "Draft doctor letter",
       query: lang === "de" ? "Arztbrief vorbereiten" : "Draft doctor letter",
     },
+    {
+      label: lang === "de" ? "Wer sieht meine Daten?" : "Who has access?",
+      query:
+        lang === "de"
+          ? "Wer hat Zugriff auf meine Daten?"
+          : "Who has access to my data?",
+    },
   ];
 
   const onSend = () => {
