@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import type { SaveResult } from "../api";
 import { SCORADChart } from "../charts";
 import type { DermaTrackData, Lang } from "../data";
 import { Icon } from "../icons";
@@ -20,10 +21,25 @@ export interface ConfirmCardProps {
     artifact?: ReactNode;
   };
   lang: Lang;
+  onConfirm?: () => Promise<SaveResult | SaveResult[]>;
 }
 
-export function ConfirmCard({ proposal, success, lang }: ConfirmCardProps) {
-  const [state, setState] = useState<"pending" | "confirmed" | "declined">("pending");
+export function ConfirmCard({ proposal, success, lang, onConfirm }: ConfirmCardProps) {
+  const [state, setState] = useState<"pending" | "running" | "confirmed" | "declined">("pending");
+  const [source, setSource] = useState<SaveResult["source"] | null>(null);
+
+  const confirm = async () => {
+    setState("running");
+    if (!onConfirm) {
+      setSource("local");
+      setState("confirmed");
+      return;
+    }
+    const result = await onConfirm();
+    const results = Array.isArray(result) ? result : [result];
+    setSource(results.every((item) => item.source === "backend") ? "backend" : "local");
+    setState("confirmed");
+  };
 
   if (state === "declined") {
     return (
@@ -92,7 +108,7 @@ export function ConfirmCard({ proposal, success, lang }: ConfirmCardProps) {
               letterSpacing: "0.04em",
             }}
           >
-            {lang === "de" ? "AUSGEFÜHRT" : "EXECUTED"}
+            {source === "backend" ? "BACKEND SYNC" : "DEMO SAVE"}
           </span>
         </div>
         {success.artifact && <div style={{ padding: 14 }}>{success.artifact}</div>}
@@ -173,7 +189,8 @@ export function ConfirmCard({ proposal, success, lang }: ConfirmCardProps) {
           {proposal.declineLabel || (lang === "de" ? "Abbrechen" : "Cancel")}
         </button>
         <button
-          onClick={() => setState("confirmed")}
+          onClick={confirm}
+          disabled={state === "running"}
           style={{
             marginLeft: "auto",
             padding: "7px 14px",
@@ -183,14 +200,14 @@ export function ConfirmCard({ proposal, success, lang }: ConfirmCardProps) {
             color: "var(--bg)",
             fontSize: 12,
             fontWeight: 700,
-            cursor: "pointer",
+            cursor: state === "running" ? "wait" : "pointer",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
           }}
         >
           <Icon.check size={12} color="var(--bg)" />
-          {proposal.confirmLabel}
+          {state === "running" ? (lang === "de" ? "Synchronisiert..." : "Syncing...") : proposal.confirmLabel}
         </button>
       </div>
     </div>
@@ -326,6 +343,121 @@ export function MealLoggedArtifact({ mealLabel, foods, flagged = [], lang, onRou
         >
           {lang === "de" ? "Im Tageseintrag öffnen" : "Open in daily entry"}
           <Icon.arrowRight size={11} color="var(--sage-d)" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function SyncReceipt({
+  label,
+  detail,
+  lang,
+  onRoute,
+  route,
+}: {
+  label: string;
+  detail: string;
+  lang: Lang;
+  onRoute?: (r: Route) => void;
+  route?: Route;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: 12,
+        background: "var(--bg-2)",
+        border: "1px solid var(--line)",
+        borderRadius: 12,
+      }}
+    >
+      <span
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          background: "color-mix(in oklch, var(--sage) 28%, var(--card))",
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Icon.check size={16} color="var(--sage-d)" />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 800 }}>{label}</div>
+        <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+          {detail}
+        </div>
+      </div>
+      {onRoute && route && (
+        <button
+          onClick={() => onRoute(route)}
+          style={{
+            border: "1px solid var(--line)",
+            background: "var(--card)",
+            color: "var(--sage-d)",
+            borderRadius: 10,
+            padding: "6px 9px",
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {lang === "de" ? "Öffnen" : "Open"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function FlareLoggedArtifact({
+  region,
+  severity,
+  lang,
+  onRoute,
+}: {
+  region: string;
+  severity: number;
+  lang: Lang;
+  onRoute?: (r: Route) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: 12,
+        background: "var(--bg-2)",
+        border: "1px solid var(--line)",
+        borderRadius: 12,
+      }}
+    >
+      <Icon.body size={20} color="var(--clay-d)" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 800 }}>{region}</div>
+        <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+          {lang === "de" ? "Juckreiz" : "Itch"} {severity}/10 · {lang === "de" ? "Körperkarte" : "body map"}
+        </div>
+      </div>
+      {onRoute && (
+        <button
+          onClick={() => onRoute("skin")}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "var(--sage-d)",
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          {lang === "de" ? "Ansehen →" : "View →"}
         </button>
       )}
     </div>

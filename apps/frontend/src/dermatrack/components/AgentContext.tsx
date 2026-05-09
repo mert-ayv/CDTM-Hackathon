@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { ApiStatus } from "../api";
 import type { DermaTrackData, Lang } from "../data";
 import type { Route } from "../shell";
 import type { ChatMessage } from "./AgentChat";
@@ -15,6 +16,7 @@ interface AgentContextValue {
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
+  apiStatus: ApiStatus;
 }
 
 const Ctx = createContext<AgentContextValue | null>(null);
@@ -29,6 +31,7 @@ interface AgentProviderProps {
   data: DermaTrackData;
   lang: Lang;
   onRoute: (r: Route) => void;
+  apiStatus: ApiStatus;
   children: ReactNode;
 }
 
@@ -37,7 +40,7 @@ const newId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-export function AgentProvider({ data, lang, onRoute, children }: AgentProviderProps) {
+export function AgentProvider({ data, lang, onRoute, apiStatus, children }: AgentProviderProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => seedMessages(data, lang, onRoute));
   const [thinking, setThinking] = useState(false);
   const [isPaletteOpen, setPaletteOpen] = useState(false);
@@ -94,8 +97,9 @@ export function AgentProvider({ data, lang, onRoute, children }: AgentProviderPr
       openPalette,
       closePalette,
       togglePalette,
+      apiStatus,
     }),
-    [data, lang, onRoute, messages, send, thinking, isPaletteOpen, openPalette, closePalette, togglePalette],
+    [data, lang, onRoute, messages, send, thinking, isPaletteOpen, openPalette, closePalette, togglePalette, apiStatus],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

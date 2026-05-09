@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createDiaryEntry, DEMO_USER_ID } from "../api";
 import { DayStrip } from "../components/DayStrip";
 import type { Food } from "../data";
 import { fmtDate, fmtDay, fmtTime, useT } from "../i18n";
@@ -14,6 +15,24 @@ const ACTIVITIES = [
   { id: "spazier", de: "Spaziergang", en: "Walk" },
   { id: "keine", de: "Keine", en: "None" },
 ] as const;
+
+const FOOD_TAGS = [
+  { id: "Histamin", de: "Histamin", en: "Histamine" },
+  { id: "Gluten", de: "Gluten", en: "Gluten" },
+  { id: "Milch", de: "Milch", en: "Dairy" },
+  { id: "Nüsse", de: "Nüsse", en: "Nuts" },
+  { id: "Alkohol", de: "Alkohol", en: "Alcohol" },
+  { id: "Koffein", de: "Koffein", en: "Caffeine" },
+] as const;
+
+const TRIGGER_CATEGORY_BY_TAG: Record<string, string> = {
+  Histamin: "histamine",
+  Alkohol: "alcohol",
+  Gluten: "gluten",
+  Milch: "dairy",
+  Nüsse: "nuts",
+  Koffein: "custom",
+};
 
 interface MealSlot {
   id: string;
@@ -67,6 +86,10 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
   const [activity, setActivity] = useState(selectedDay.activity.id);
   const [itch, setItch] = useState(selectedDay.itch);
   const [moisturizer, setMoisturizer] = useState(selectedDay.meds.includes("pflege") ? 2 : 0);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "backend" | "local">("idle");
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [foodDraft, setFoodDraft] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   useEffect(() => {
     setMeals(makeMealSlots(selectedDay.foods, selectedDay.hasPhoto));
@@ -75,6 +98,9 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
     setActivity(selectedDay.activity.id);
     setItch(selectedDay.itch);
     setMoisturizer(selectedDay.meds.includes("pflege") ? 2 : 0);
+    setEditingMealId(null);
+    setFoodDraft("");
+    setSelectedTags([]);
   }, [selectedIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePhoto = (id: string) =>
@@ -84,6 +110,112 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
     setMeals((ms) =>
       ms.map((m) => (m.id === mealId ? { ...m, foods: m.foods.filter((f) => f.id !== foodId) } : m)),
     );
+
+  const addMeal = () =>
+    setMeals((current) => [
+      ...current,
+      {
+        id: `snack-${current.length}`,
+        time: fmtTime(new Date(), lang),
+        label: { de: "Snack", en: "Snack" },
+        foods: [],
+        hasPhoto: false,
+      },
+    ]);
+
+  const openFoodComposer = (mealId: string) => {
+    setEditingMealId(mealId);
+    setFoodDraft("");
+    setSelectedTags([]);
+  };
+
+  const cancelFoodComposer = () => {
+    setEditingMealId(null);
+    setFoodDraft("");
+    setSelectedTags([]);
+  };
+
+  const toggleTag = (tag: string) =>
+    setSelectedTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
+
+  const addFoodToMeal = (mealId: string, food: Food) =>
+    setMeals((current) =>
+      current.map((meal) => {
+        if (meal.id !== mealId) return meal;
+        if (meal.foods.some((currentFood) => currentFood.id === food.id)) return meal;
+        return { ...meal, foods: [...meal.foods, food] };
+      }),
+    );
+
+  const saveFoodDraft = (mealId: string, food?: Food) => {
+    const name = foodDraft.trim();
+    const matchedFood =
+      food ||
+      data.FOODS.find((item) => item.de.toLowerCase() === name.toLowerCase() || item.en.toLowerCase() === name.toLowerCase());
+    if (!matchedFood && !name) return;
+
+    const draftFood: Food =
+      matchedFood ||
+      {
+        id: `custom-${Date.now()}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+        de: name,
+        en: name,
+        tags: selectedTags,
+      };
+
+    addFoodToMeal(mealId, {
+      ...draftFood,
+      tags: Array.from(new Set([...(draftFood.tags || []), ...selectedTags])),
+    });
+    cancelFoodComposer();
+  };
+
+  const saveEntry = async () => {
+    setSaveState("saving");
+    const payload = {
+      userId: DEMO_USER_ID,
+      occurredAt: selectedDay.date.toISOString(),
+      food: meals.flatMap((meal) =>
+        meal.foods.map((food) => ({
+          name: food.en,
+          mealType: meal.id.startsWith("snack") ? "snack" : meal.id,
+          triggerCategories: Array.from(
+            new Set(food.tags.map((tag) => TRIGGER_CATEGORY_BY_TAG[tag] || "custom")),
+          ),
+          notes: food.tags.length ? `Tags: ${food.tags.join(", ")}` : undefined,
+        })),
+      ),
+      sport:
+        activity === "keine"
+          ? undefined
+          : {
+              type: activity,
+              durationMinutes: 35,
+              intensity: Math.min(5, Math.max(1, Math.round(selectedDay.sweat * 4))) as 1 | 2 | 3 | 4 | 5,
+              sweatLevel: Math.round(selectedDay.sweat * 8),
+              location: "unknown",
+            },
+      stress: { level: stress * 2, source: "daily-check-in" },
+      sleep: { hours: sleep, quality: sleep >= 7 ? 4 : sleep >= 6 ? 3 : 2 },
+      activeRashes: [
+        {
+          bodyRegionId: selectedDay.regions[0]?.regionId || "arm-l-flex",
+          side: selectedDay.regions[0]?.side || "front",
+          itchiness: itch,
+          dryness: Math.min(10, itch * 0.8),
+          redness: Math.min(10, itch * 0.9),
+          active: itch > 1,
+          notes: "Saved from DermaTrack Agent OS demo",
+        },
+      ],
+      habits: moisturizer > 0 ? [`emollient-${moisturizer}x`] : [],
+      notes: "Saved from DermaTrack Agent OS.",
+    };
+
+    const result = await createDiaryEntry(payload);
+    setSaveState(result.source === "backend" ? "backend" : "local");
+    window.setTimeout(() => onRoute("today"), 650);
+  };
 
   const dayLabel = isToday
     ? lang === "de"
@@ -117,9 +249,18 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
               kind="primary"
               size="md"
               icon={<Icon.check size={14} color="var(--bg)" />}
-              onClick={() => onRoute("today")}
+              onClick={saveEntry}
+              style={{ opacity: saveState === "saving" ? 0.72 : 1 }}
             >
-              {isToday ? t("loggen") : lang === "de" ? "Speichern" : "Save"}
+              {saveState === "saving"
+                ? lang === "de"
+                  ? "Speichert..."
+                  : "Saving..."
+                : isToday
+                ? t("loggen")
+                : lang === "de"
+                ? "Speichern"
+                : "Save"}
             </Btn>
           </div>
         }
@@ -134,7 +275,7 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
           title={lang === "de" ? "Ernährung" : "Nutrition"}
           sub={dayLabel}
           right={
-            <Btn kind="ghost" size="sm" icon={<Icon.plus size={12} />}>
+            <Btn kind="ghost" size="sm" icon={<Icon.plus size={12} />} onClick={addMeal}>
               {lang === "de" ? "Mahlzeit" : "Meal"}
             </Btn>
           }
@@ -146,8 +287,17 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
               key={m.id}
               meal={m}
               lang={lang}
+              allFoods={data.FOODS}
+              isEditing={editingMealId === m.id}
+              draft={foodDraft}
+              selectedTags={selectedTags}
               onTogglePhoto={() => togglePhoto(m.id)}
               onRemoveFood={(foodId) => removeFood(m.id, foodId)}
+              onOpenComposer={() => openFoodComposer(m.id)}
+              onDraftChange={setFoodDraft}
+              onToggleTag={toggleTag}
+              onSaveDraft={(food) => saveFoodDraft(m.id, food)}
+              onCancelDraft={cancelFoodComposer}
             />
           ))}
         </div>
@@ -379,8 +529,12 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
         }}
       >
         {lang === "de"
-          ? `Eintrag #${selectedIdx + 1} · auf Gerät gespeichert · DiGA-konform`
-          : `Entry #${selectedIdx + 1} · stored on-device · DiGA-compliant`}
+          ? `Eintrag #${selectedIdx + 1} · ${
+              saveState === "backend" ? "Backend gespeichert" : saveState === "local" ? "Demo-Fallback gespeichert" : "bereit"
+            } · DiGA-konform`
+          : `Entry #${selectedIdx + 1} · ${
+              saveState === "backend" ? "saved to backend" : saveState === "local" ? "saved to demo fallback" : "ready"
+            } · DiGA-compliant`}
       </div>
     </div>
   );
@@ -443,12 +597,44 @@ function SectionHeader({ icon, title, sub, right }: SectionHeaderProps) {
 interface MealCardProps {
   meal: MealSlot;
   lang: "de" | "en";
+  allFoods: Food[];
+  isEditing: boolean;
+  draft: string;
+  selectedTags: string[];
   onTogglePhoto: () => void;
   onRemoveFood: (foodId: string) => void;
+  onOpenComposer: () => void;
+  onDraftChange: (value: string) => void;
+  onToggleTag: (tag: string) => void;
+  onSaveDraft: (food?: Food) => void;
+  onCancelDraft: () => void;
 }
 
-function MealCard({ meal, lang, onTogglePhoto, onRemoveFood }: MealCardProps) {
+function MealCard({
+  meal,
+  lang,
+  allFoods,
+  isEditing,
+  draft,
+  selectedTags,
+  onTogglePhoto,
+  onRemoveFood,
+  onOpenComposer,
+  onDraftChange,
+  onToggleTag,
+  onSaveDraft,
+  onCancelDraft,
+}: MealCardProps) {
   const isEmpty = meal.foods.length === 0;
+  const suggestions = allFoods
+    .filter((food) => {
+      const query = draft.trim().toLowerCase();
+      const notInMeal = !meal.foods.some((currentFood) => currentFood.id === food.id);
+      if (!query) return notInMeal;
+      return notInMeal && (food.de.toLowerCase().includes(query) || food.en.toLowerCase().includes(query));
+    })
+    .slice(0, 4);
+
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Photo / placeholder */}
@@ -585,26 +771,132 @@ function MealCard({ meal, lang, onTogglePhoto, onRemoveFood }: MealCardProps) {
           </div>
         )}
 
-        <button
-          style={{
-            marginTop: "auto",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            padding: "8px 12px",
-            borderRadius: 10,
-            border: "1px dashed var(--line)",
-            background: "var(--bg-2)",
-            color: "var(--ink-2)",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <Icon.plus size={12} />
-          {lang === "de" ? "Lebensmittel hinzufügen" : "Add food"}
-        </button>
+        {isEditing ? (
+          <div
+            style={{
+              marginTop: "auto",
+              display: "grid",
+              gap: 9,
+              padding: 10,
+              borderRadius: 12,
+              border: "1px solid var(--line)",
+              background: "color-mix(in oklch, var(--sage) 8%, var(--card))",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Icon.bowl size={14} color="var(--sage-d)" />
+              <input
+                autoFocus
+                value={draft}
+                onChange={(event) => onDraftChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onSaveDraft();
+                  if (event.key === "Escape") onCancelDraft();
+                }}
+                placeholder={lang === "de" ? "z.B. Pasta, Apfel, Kaffee..." : "e.g. pasta, apple, coffee..."}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  fontFamily: "inherit",
+                  fontSize: 13,
+                  fontWeight: 650,
+                }}
+              />
+            </div>
+
+            {suggestions.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {suggestions.map((food) => (
+                  <button
+                    key={food.id}
+                    onClick={() => onSaveDraft(food)}
+                    className="pill neutral"
+                    style={{ border: "1px solid var(--line)", cursor: "pointer", height: 24, fontSize: 11 }}
+                  >
+                    {food[lang]}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {FOOD_TAGS.map((tag) => {
+                const active = selectedTags.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => onToggleTag(tag.id)}
+                    style={{
+                      border: "1px solid " + (active ? "var(--clay-d)" : "var(--line)"),
+                      background: active ? "color-mix(in oklch, var(--clay) 18%, var(--card))" : "var(--card)",
+                      color: active ? "var(--clay-d)" : "var(--ink-2)",
+                      borderRadius: 999,
+                      padding: "4px 8px",
+                      fontSize: 10,
+                      fontWeight: 750,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tag[lang]}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}>
+              <button
+                onClick={() => onSaveDraft()}
+                disabled={!draft.trim()}
+                style={{
+                  height: 32,
+                  borderRadius: 10,
+                  border: "1px solid " + (draft.trim() ? "var(--ink)" : "var(--line)"),
+                  background: draft.trim() ? "var(--ink)" : "var(--bg-2)",
+                  color: draft.trim() ? "var(--bg)" : "var(--ink-3)",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: draft.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                {lang === "de" ? "Hinzufügen" : "Add food"}
+              </button>
+              <button
+                onClick={onCancelDraft}
+                className="icon-btn"
+                style={{ width: 32, height: 32 }}
+                aria-label={lang === "de" ? "Abbrechen" : "Cancel"}
+              >
+                <Icon.close size={13} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={onOpenComposer}
+            style={{
+              marginTop: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px dashed var(--line)",
+              background: "var(--bg-2)",
+              color: "var(--ink-2)",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <Icon.plus size={12} />
+            {lang === "de" ? "Lebensmittel hinzufügen" : "Add food"}
+          </button>
+        )}
       </div>
     </div>
   );

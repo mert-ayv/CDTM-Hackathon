@@ -53,6 +53,13 @@ const targets: ServiceTarget[] = [
 ];
 
 const gatewayPort = getNumberEnv("API_GATEWAY_PORT", 3000);
+const agentActionReceipts: Array<{
+  id: string;
+  userId: string;
+  kind: string;
+  payload: unknown;
+  createdAt: string;
+}> = [];
 
 function removeTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
@@ -154,6 +161,27 @@ createService({
           treatmentTracking: true,
         },
       });
+    });
+
+    app.get("/api/agent/action-receipts", (request, response) => {
+      const userId = request.query.userId?.toString();
+      response.json({
+        receipts: userId
+          ? agentActionReceipts.filter((receipt) => receipt.userId === userId)
+          : agentActionReceipts,
+      });
+    });
+
+    app.post("/api/agent/action-receipts", (request, response) => {
+      const receipt = {
+        id: `agent_${crypto.randomUUID()}`,
+        userId: request.body?.userId ?? "demo-user",
+        kind: request.body?.kind ?? "agent-action",
+        payload: request.body?.payload ?? {},
+        createdAt: new Date().toISOString(),
+      };
+      agentActionReceipts.unshift(receipt);
+      response.status(201).json({ receipt });
     });
 
     for (const target of targets) {
