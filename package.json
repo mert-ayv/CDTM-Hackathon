@@ -17,6 +17,8 @@
     "dev:backend:insights": "npm run dev:insights -w apps/backend",
     "dev:backend:treatment": "npm run dev:treatment -w apps/backend",
     "backend:lan-ip": "npm run lan-ip -w apps/backend",
+    "backend:db:migrate": "npm run db:migrate -w apps/backend",
+    "backend:db:health": "npm run db:health -w apps/backend",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

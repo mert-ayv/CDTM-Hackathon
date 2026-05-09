@@ -42,7 +42,7 @@ export function createService({
       origin: getAllowedOrigins(),
     }),
   );
-  app.use(express.json({ limit: "10mb" }));
+  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT ?? "25mb" }));
 
   app.get("/health", (_request, response) => {
     response.json({

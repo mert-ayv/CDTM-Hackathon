@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { getDatabaseHealth } from "../../shared/database.js";
 import {
   createService,
   getNumberEnv,
@@ -100,12 +101,20 @@ createService({
   port: gatewayPort,
   registerRoutes(app) {
     app.get("/api/health", async (_request, response) => {
-      const services = await Promise.all(targets.map(fetchHealth));
+      const [services, database] = await Promise.all([
+        Promise.all(targets.map(fetchHealth)),
+        getDatabaseHealth(),
+      ]);
       response.json({
         gateway: "ok",
+        database,
         services,
         timestamp: new Date().toISOString(),
       });
+    });
+
+    app.get("/api/database/health", async (_request, response) => {
+      response.json({ database: await getDatabaseHealth() });
     });
 
     app.get("/api/services", (_request, response) => {
@@ -129,9 +138,16 @@ createService({
           treatment: `${apiBaseUrl}/api/treatment`,
         },
         features: {
+          supabasePersistence: true,
           foodLogging: true,
+          foodTriggerCategories: true,
+          openFoodFacts: "barcode-and-search",
+          foodPhotoUploads: "metadata-and-url",
+          stressTracking: true,
+          sportSweatTracking: true,
+          activeRashScales: true,
           bodyMap: true,
-          photoUploads: "metadata-only",
+          photoUploads: "data-uri-upload-local-storage-ai-analysis",
           weatherAndPollen: "placeholder",
           triggerDetection: "placeholder",
           flarePrediction: "placeholder",

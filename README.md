@@ -52,6 +52,8 @@ npm run dev:backend:environment
 npm run dev:backend:insights
 npm run dev:backend:treatment
 npm run backend:lan-ip
+npm run backend:db:migrate
+npm run backend:db:health
 ```
 
 Backend service documentation: `apps/backend/README.md`
