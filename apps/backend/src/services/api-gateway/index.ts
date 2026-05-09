@@ -1,4 +1,4 @@
-import type { Request } from "express";
+import express, { type Request } from "express";
 import { getDatabaseHealth } from "../../shared/database.js";
 import {
   createService,
@@ -53,6 +53,7 @@ const targets: ServiceTarget[] = [
 ];
 
 const gatewayPort = getNumberEnv("API_GATEWAY_PORT", 3000);
+const openAiTranscriptionModel = process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1";
 const agentActionReceipts: Array<{
   id: string;
   userId: string;
@@ -60,6 +61,9 @@ const agentActionReceipts: Array<{
   payload: unknown;
   createdAt: string;
 }> = [];
+
+const demoVoiceTranscript =
+  "I forgot last week: approximately two fast food meals and slept badly. Backfill it.";
 
 function removeTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
@@ -75,6 +79,15 @@ function getApiBaseUrl(request: Request) {
   const protocol = getStringEnv("PUBLIC_API_PROTOCOL", request.protocol);
   const host = request.get("host") ?? `localhost:${gatewayPort}`;
   return `${protocol}://${host}`;
+}
+
+function getAudioExtension(mimeType: string) {
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("mpeg")) return "mpeg";
+  if (mimeType.includes("mp3")) return "mp3";
+  if (mimeType.includes("wav")) return "wav";
+  if (mimeType.includes("ogg") || mimeType.includes("oga")) return "ogg";
+  return "webm";
 }
 
 async function fetchHealth(target: ServiceTarget) {
@@ -183,6 +196,72 @@ createService({
       agentActionReceipts.unshift(receipt);
       response.status(201).json({ receipt });
     });
+
+    app.post(
+      "/api/agent/transcribe",
+      express.raw({
+        type: ["audio/webm", "audio/mp4", "audio/mpeg", "audio/wav", "application/octet-stream"],
+        limit: process.env.AUDIO_BODY_LIMIT ?? "25mb",
+      }),
+      async (request, response) => {
+        const apiKey = process.env.OPENAI_API_KEY;
+        const audio = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+        const mimeType = request.headers["content-type"]?.split(";")[0] || "audio/webm";
+
+        if (!audio.length) {
+          response.status(400).json({
+            error: "missing_audio",
+            message: "Send a raw audio body to transcribe.",
+          });
+          return;
+        }
+
+        if (!apiKey) {
+          response.json({
+            text: demoVoiceTranscript,
+            source: "demo",
+            model: openAiTranscriptionModel,
+          });
+          return;
+        }
+
+        try {
+          const formData = new FormData();
+          const audioBytes = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer;
+          formData.append("model", openAiTranscriptionModel);
+          formData.append("file", new Blob([audioBytes], { type: mimeType }), `dermatrack-voice.${getAudioExtension(mimeType)}`);
+
+          const transcriptionResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: formData,
+          });
+
+          const result = (await transcriptionResponse.json()) as { text?: string; error?: { message?: string } };
+
+          if (!transcriptionResponse.ok || !result.text) {
+            response.status(502).json({
+              error: "transcription_failed",
+              message: result.error?.message ?? "OpenAI transcription failed.",
+            });
+            return;
+          }
+
+          response.json({
+            text: result.text,
+            source: "openai",
+            model: openAiTranscriptionModel,
+          });
+        } catch (error) {
+          response.status(502).json({
+            error: "transcription_failed",
+            message: error instanceof Error ? error.message : "OpenAI transcription failed.",
+          });
+        }
+      },
+    );
 
     for (const target of targets) {
       app.use(target.routePrefix, async (request, response) => {

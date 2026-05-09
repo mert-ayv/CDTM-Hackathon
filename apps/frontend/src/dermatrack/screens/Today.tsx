@@ -1,36 +1,39 @@
+import { useEffect, useState } from "react";
+import { AgentBootIntro } from "../components/AgentBootIntro";
 import { AgentChat } from "../components/AgentChat";
-import { fmtDate, fmtDay, useT } from "../i18n";
-import { Icon } from "../icons";
-import { Btn, PageHead } from "../shell";
 import type { ScreenProps } from "./types";
 
-export function Today({ data, lang, onRoute }: ScreenProps) {
-  const t = useT(lang);
-  const today = data.today;
+export function Today({ lang }: ScreenProps) {
+  const [introComplete, setIntroComplete] = useState(false);
+  const [contentVisible, setContentVisible] = useState(false);
+
+  useEffect(() => {
+    if (!introComplete) return;
+    const frame = window.requestAnimationFrame(() => setContentVisible(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [introComplete]);
+
+  const finishIntro = () => setIntroComplete(true);
+
+  if (!introComplete) {
+    return <AgentBootIntro lang={lang} onComplete={finishIntro} onSkip={finishIntro} />;
+  }
 
   return (
     <div className="main-inner" style={{ maxWidth: 920 }}>
-      <PageHead
-        kicker={fmtDate(today.date, lang) + " · " + fmtDay(today.date, lang)}
-        title={lang === "de" ? "Hallo Lena." : "Hi Lena."}
-        sub={
-          lang === "de"
-            ? "Frag deinen Derma Agent — er hat deine 30 Tage Logs, Foto-KI und die Pollenvorhersage zusammengezogen, und kann auf jeder Seite mit ⌘K aufgerufen werden."
-            : "Ask your Derma Agent — it has joined your 30 days of logs, photo AI and the pollen forecast, and is summonable with ⌘K from any page."
-        }
-        action={
-          <Btn
-            kind="ghost"
-            size="md"
-            icon={<Icon.plus size={14} />}
-            onClick={() => onRoute("entry")}
-          >
-            {t("jetzt_loggen")}
-          </Btn>
-        }
-      />
-
-      <AgentChat />
+      <div
+        style={{
+          opacity: contentVisible ? 1 : 0,
+          transform: contentVisible ? "translateY(0)" : "translateY(10px)",
+          transition: "opacity 220ms ease, transform 220ms ease",
+          pointerEvents: contentVisible ? "auto" : "none",
+        }}
+        aria-hidden={!contentVisible}
+      >
+        <div className="dt-boot-module dt-boot-module-1">
+          <AgentChat showScope={false} />
+        </div>
+      </div>
     </div>
   );
 }

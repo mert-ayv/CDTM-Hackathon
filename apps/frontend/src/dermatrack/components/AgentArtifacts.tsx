@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { SaveResult } from "../api";
 import { SCORADChart } from "../charts";
 import type { DermaTrackData, Lang } from "../data";
+import { fmtDate } from "../i18n";
 import { Icon } from "../icons";
 import type { Route } from "../shell";
 
@@ -464,6 +465,246 @@ export function FlareLoggedArtifact({
   );
 }
 
+export function FlareDetectiveArtifact({
+  data,
+  lang,
+  onRoute,
+}: {
+  data: DermaTrackData;
+  lang: Lang;
+  onRoute: (r: Route) => void;
+}) {
+  const worst = [...data.days].sort((a, b) => b.scorad - a.scorad)[0] ?? data.today;
+  const previous = data.days[Math.max(0, data.days.indexOf(worst) - 1)] ?? worst;
+  const foods = previous.foods.slice(0, 3).map((food) => food[lang]);
+  const region =
+    data.BODY_REGIONS.find((item) => item.id === worst.regions[0]?.regionId)?.[lang] ??
+    (lang === "de" ? "Ellenbeugen" : "elbow flexures");
+
+  const evidence = [
+    {
+      label: lang === "de" ? "Vorabend-Ernährung" : "Previous evening food",
+      value: foods.length ? foods.join(" + ") : lang === "de" ? "Keine Mahlzeit geloggt" : "No meal logged",
+      icon: <Icon.bowl size={13} color="var(--clay-d)" />,
+    },
+    {
+      label: lang === "de" ? "Schlafdefizit" : "Sleep deficit",
+      value: `${worst.sleepH.toFixed(1)}h · ${lang === "de" ? "Schlafverlust" : "sleep loss"} ${worst.sleepLoss}/10`,
+      icon: <Icon.moon size={13} color="var(--sage-d)" />,
+    },
+    {
+      label: lang === "de" ? "Umwelt" : "Environment",
+      value: `${lang === "de" ? "Birke" : "Birch"} ${worst.birchPollen}/4 · ${worst.humidity}% ${lang === "de" ? "Feuchte" : "humidity"}`,
+      icon: <Icon.leaf size={13} color="var(--sage-d)" />,
+    },
+    {
+      label: lang === "de" ? "Foto + Körperkarte" : "Photo + body map",
+      value: `${region} · ${lang === "de" ? "Juckreiz" : "itch"} ${worst.itch}/10`,
+      icon: <Icon.camera size={13} color="var(--clay-d)" />,
+    },
+  ];
+
+  const hypotheses = [
+    {
+      name: lang === "de" ? "Histamin-Stack" : "Histamine stack",
+      score: 84,
+      note: lang === "de" ? "Essen + Schlaf passen zeitlich" : "Food + sleep line up in time",
+    },
+    {
+      name: lang === "de" ? "Schlafschuld" : "Sleep debt",
+      score: 72,
+      note: lang === "de" ? "3 schlechte Nächte vor Peak" : "3 short nights before peak",
+    },
+    {
+      name: lang === "de" ? "Birkenpollen" : "Birch pollen",
+      score: 67,
+      note: lang === "de" ? "Regionaler Spike am selben Tag" : "Regional spike same day",
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--line)",
+        borderRadius: 14,
+        boxShadow: "var(--shadow-sm)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: 14,
+          borderBottom: "1px solid var(--line-2)",
+          background: "linear-gradient(135deg, color-mix(in oklch, var(--sage) 14%, var(--card)), var(--card))",
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 11,
+            background: "var(--ink)",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Icon.sparkle size={17} color="var(--bg)" />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+            {lang === "de" ? "Agent-Untersuchung" : "Agent investigation"}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 850, marginTop: 2 }}>
+            {lang === "de" ? "Flare Detective" : "Flare Detective"}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div className="num" style={{ fontSize: 24, fontWeight: 850, color: "var(--clay-d)" }}>
+            {worst.scorad.toFixed(1)}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+            {fmtDate(worst.date, lang)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: 14, display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
+          {evidence.map((item) => (
+            <div
+              key={item.label}
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: 12,
+                padding: 10,
+                background: "var(--bg-2)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                {item.icon}
+                <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                  {item.label}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 750, lineHeight: 1.3 }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+          {hypotheses.map((hypothesis) => (
+            <div
+              key={hypothesis.name}
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: 12,
+                padding: 10,
+                background: "var(--card)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                <div style={{ fontSize: 12, fontWeight: 800 }}>{hypothesis.name}</div>
+                <div className="num" style={{ fontSize: 15, fontWeight: 850, color: "var(--sage-d)" }}>
+                  {hypothesis.score}%
+                </div>
+              </div>
+              <div
+                aria-hidden
+                style={{
+                  height: 6,
+                  borderRadius: 999,
+                  background: "var(--line-2)",
+                  overflow: "hidden",
+                  margin: "8px 0",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${hypothesis.score}%`,
+                    height: "100%",
+                    borderRadius: 999,
+                    background: "linear-gradient(90deg, var(--sage-d), var(--clay))",
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: 10, color: "var(--ink-3)", lineHeight: 1.35 }}>{hypothesis.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+            gap: 10,
+            borderTop: "1px solid var(--line-2)",
+            paddingTop: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontWeight: 800, marginBottom: 4 }}>
+              {lang === "de" ? "Gegenbeweis" : "Counter-evidence"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.45 }}>
+              {lang === "de"
+                ? "Kein Hausstaub-Flag und keine neue Pflege an diesem Tag. Der Agent priorisiert daher Essen, Schlaf und Pollen."
+                : "No dust flag and no new skincare that day. The agent is prioritizing food, sleep and pollen."}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontWeight: 800, marginBottom: 4 }}>
+              {lang === "de" ? "Nächster Test" : "Next test"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.45 }}>
+              {lang === "de"
+                ? "48h histaminarm bei hohem Pollenrisiko. Wenn SCORAD fällt, sinkt die Pollen-Hypothese."
+                : "48h low histamine during high pollen. If SCORAD falls, the pollen hypothesis drops."}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={() => onRoute("triggers")}
+            style={{
+              border: "1px solid var(--ink)",
+              background: "var(--ink)",
+              color: "var(--bg)",
+              borderRadius: 10,
+              padding: "8px 11px",
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            {lang === "de" ? "Trigger öffnen" : "Open triggers"}
+          </button>
+          <button
+            onClick={() => onRoute("entry")}
+            style={{
+              border: "1px solid var(--line)",
+              background: "var(--bg-2)",
+              color: "var(--sage-d)",
+              borderRadius: 10,
+              padding: "8px 11px",
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            {lang === "de" ? "Testplan loggen" : "Log test plan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── LetterPreviewArtifact: mini A4 inline ──
 
 export interface LetterPreviewArtifactProps {
@@ -655,6 +896,383 @@ export function LetterPreviewArtifact({ data, lang, onRoute }: LetterPreviewArti
           <Icon.file size={13} color="var(--bg)" />
           {lang === "de" ? "Vollbild öffnen" : "Open fullscreen"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── BackfillDraftArtifact ──
+
+export interface BackfillDraftArtifactProps {
+  lang: Lang;
+  onRoute?: (r: Route) => void;
+}
+
+type BackfillChipTone = "sage" | "clay" | "neutral";
+
+function BackfillChip({ children, tone = "neutral" }: { children: ReactNode; tone?: BackfillChipTone }) {
+  return (
+    <span
+      className={"pill " + tone}
+      style={{
+        height: 22,
+        fontSize: 10,
+        fontWeight: 800,
+        fontFamily: "var(--font-mono)",
+        letterSpacing: 0,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function BackfillRouteButton({
+  icon,
+  label,
+  route,
+  onRoute,
+  primary,
+}: {
+  icon: ReactNode;
+  label: string;
+  route: Route;
+  onRoute?: (r: Route) => void;
+  primary?: boolean;
+}) {
+  return (
+    <button
+      onClick={() => onRoute?.(route)}
+      disabled={!onRoute}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        minHeight: 34,
+        padding: "8px 11px",
+        borderRadius: 10,
+        border: primary ? "1px solid var(--ink)" : "1px solid var(--line)",
+        background: primary ? "var(--ink)" : "var(--card)",
+        color: primary ? "var(--bg)" : "var(--sage-d)",
+        fontSize: 11,
+        fontWeight: 800,
+        cursor: onRoute ? "pointer" : "not-allowed",
+        opacity: onRoute ? 1 : 0.55,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+export function BackfillDraftArtifact({ lang, onRoute }: BackfillDraftArtifactProps) {
+  const days = [
+    {
+      day: lang === "de" ? "Mo" : "Mon",
+      date: "27.04",
+      records: [{ label: lang === "de" ? "Fast Food" : "fast food", tone: "clay" as const }],
+    },
+    {
+      day: lang === "de" ? "Di" : "Tue",
+      date: "28.04",
+      records: [
+        { label: lang === "de" ? "Wenig Schlaf" : "poor sleep", tone: "sage" as const },
+        { label: lang === "de" ? "Fast Food" : "fast food", tone: "clay" as const },
+      ],
+    },
+    {
+      day: lang === "de" ? "Mi" : "Wed",
+      date: "29.04",
+      records: [{ label: lang === "de" ? "Wenig Schlaf" : "poor sleep", tone: "sage" as const }],
+    },
+    {
+      day: lang === "de" ? "Do" : "Thu",
+      date: "30.04",
+      records: [
+        { label: lang === "de" ? "Ellenbogen-Flare" : "elbow flare", tone: "clay" as const },
+        { label: lang === "de" ? "Wenig Schlaf" : "poor sleep", tone: "sage" as const },
+      ],
+    },
+    {
+      day: lang === "de" ? "Fr" : "Fri",
+      date: "01.05",
+      records: [
+        { label: lang === "de" ? "Ellenbogen-Flare" : "elbow flare", tone: "clay" as const },
+        { label: "mometasone", tone: "neutral" as const },
+      ],
+    },
+    {
+      day: lang === "de" ? "Sa" : "Sat",
+      date: "02.05",
+      records: [
+        { label: "mometasone", tone: "neutral" as const },
+        { label: lang === "de" ? "Wenig Schlaf" : "poor sleep", tone: "sage" as const },
+      ],
+    },
+    {
+      day: lang === "de" ? "So" : "Sun",
+      date: "03.05",
+      records: [{ label: lang === "de" ? "Fast Food" : "fast food", tone: "clay" as const }],
+    },
+  ];
+
+  const extracted = [
+    {
+      icon: <Icon.bowl size={14} color="var(--clay-d)" />,
+      label: lang === "de" ? "Fast Food" : "Fast food",
+      value: "3x",
+      detail: lang === "de" ? "Mo, Di, So" : "Mon, Tue, Sun",
+    },
+    {
+      icon: <Icon.moon size={14} color="var(--sage-d)" />,
+      label: lang === "de" ? "Schlechter Schlaf" : "Poor sleep",
+      value: "4x",
+      detail: lang === "de" ? "Di, Mi, Do, Sa" : "Tue, Wed, Thu, Sat",
+    },
+    {
+      icon: <Icon.body size={14} color="var(--clay-d)" />,
+      label: lang === "de" ? "Ellenbogen-Flare" : "Elbow flare",
+      value: lang === "de" ? "Do/Fr" : "Thu/Fri",
+      detail: lang === "de" ? "Beuge, Schub aus Erinnerung" : "flexure, flare from memory",
+    },
+    {
+      icon: <Icon.pill size={14} color="var(--ink-3)" />,
+      label: "Mometasone",
+      value: lang === "de" ? "Fr/Sa" : "Fri/Sat",
+      detail: lang === "de" ? "Anwendung geschätzt" : "application estimated",
+    },
+  ];
+
+  const missing = [
+    lang === "de" ? "Uhrzeiten für Essen und Salbe" : "Times for meals and ointment",
+    lang === "de" ? "Schlafdauer in Stunden" : "Sleep duration in hours",
+    lang === "de" ? "Juckreiz/Schweregrad je Tag" : "Itch/severity per day",
+    lang === "de" ? "Foto-Nachweis für Do/Fr" : "Photo evidence for Thu/Fri",
+  ];
+
+  return (
+    <div
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--line)",
+        borderRadius: 14,
+        boxShadow: "var(--shadow-sm)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: 14,
+          borderBottom: "1px solid var(--line-2)",
+          background: "linear-gradient(135deg, color-mix(in oklch, var(--clay) 12%, var(--card)), var(--card))",
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 11,
+            background: "var(--ink)",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Icon.rotate size={17} color="var(--bg)" />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: 0,
+              textTransform: "uppercase",
+              color: "var(--ink-3)",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            {lang === "de" ? "Backfill-Entwurf" : "Backfill draft"}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 850, marginTop: 2 }}>
+            {lang === "de" ? "Ungefähre Woche rekonstruiert" : "Approximate week reconstructed"}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div className="num" style={{ fontSize: 22, fontWeight: 850, color: "var(--clay-d)" }}>
+            7d
+          </div>
+          <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+            27.04-03.05
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: 14, display: "grid", gap: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(7, minmax(86px, 1fr))",
+            gap: 6,
+            overflowX: "auto",
+            paddingBottom: 2,
+          }}
+        >
+          {days.map((day) => (
+            <div
+              key={day.day}
+              style={{
+                minHeight: 116,
+                border: "1px solid var(--line)",
+                borderRadius: 12,
+                background: "var(--bg-2)",
+                padding: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 850 }}>{day.day}</span>
+                <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+                  {day.date}
+                </span>
+              </div>
+              <div style={{ display: "grid", gap: 5 }}>
+                {day.records.map((record) => (
+                  <span
+                    key={record.label}
+                    className={"pill " + record.tone}
+                    style={{
+                      height: "auto",
+                      minHeight: 22,
+                      justifyContent: "flex-start",
+                      fontSize: 10,
+                      lineHeight: 1.2,
+                      padding: "4px 7px",
+                    }}
+                  >
+                    {record.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            border: "1px solid var(--line)",
+            borderRadius: 12,
+            background: "var(--bg-2)",
+            padding: 12,
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon.mic size={13} color="var(--sage-d)" />
+            <span style={{ fontSize: 10, fontWeight: 800, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+              {lang === "de" ? "Quellzitat" : "Source quote"}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {lang === "de"
+              ? "Letzte Woche war ungefähr drei Mal Fast Food, vier Nächte schlechter Schlaf, Ellenbogen wurden Do/Fr schlimm, und Mometason habe ich Freitag und Samstag benutzt."
+              : "Last week was roughly three fast-food meals, four nights of poor sleep, elbows got bad Thu/Fri, and I used mometasone Friday and Saturday."}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <BackfillChip tone="sage">{lang === "de" ? "geschätzt" : "estimated"}</BackfillChip>
+            <BackfillChip tone="neutral">{lang === "de" ? "Erinnerung" : "user memory"}</BackfillChip>
+            <BackfillChip tone="clay">{lang === "de" ? "prüfen" : "needs review"}</BackfillChip>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+          {extracted.map((item) => (
+            <div
+              key={item.label}
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: 12,
+                padding: 10,
+                background: "var(--card)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                {item.icon}
+                <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontWeight: 800 }}>
+                  {lang === "de" ? "extrahiert" : "extracted"}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 850, flex: 1 }}>{item.label}</div>
+                <div className="num" style={{ fontSize: 16, fontWeight: 850, color: "var(--sage-d)" }}>
+                  {item.value}
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 5, lineHeight: 1.35 }}>
+                {item.detail}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(180px, 1fr) auto",
+            gap: 12,
+            alignItems: "end",
+            borderTop: "1px solid var(--line-2)",
+            paddingTop: 12,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--ink-3)",
+                fontFamily: "var(--font-mono)",
+                fontWeight: 800,
+                marginBottom: 6,
+              }}
+            >
+              {lang === "de" ? "Fehlende Felder" : "Missing fields"}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {missing.map((item) => (
+                <BackfillChip key={item}>{item}</BackfillChip>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <BackfillRouteButton
+              icon={<Icon.plus size={12} color={onRoute ? "var(--bg)" : "var(--ink-3)"} />}
+              label={lang === "de" ? "Eintrag" : "Entry"}
+              route="entry"
+              onRoute={onRoute}
+              primary
+            />
+            <BackfillRouteButton
+              icon={<Icon.body size={12} color="var(--sage-d)" />}
+              label={lang === "de" ? "Haut" : "Skin"}
+              route="skin"
+              onRoute={onRoute}
+            />
+            <BackfillRouteButton
+              icon={<Icon.file size={12} color="var(--sage-d)" />}
+              label={lang === "de" ? "Arztbrief" : "Doctor letter"}
+              route="letter"
+              onRoute={onRoute}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

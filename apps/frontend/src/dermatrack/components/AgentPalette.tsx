@@ -8,7 +8,7 @@ const isMacLike =
   /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent || "");
 
 export function AgentPalette() {
-  const { isPaletteOpen, closePalette, lang, messages, send, thinking } = useAgent();
+  const { isPaletteOpen, closePalette, lang, messages, send, thinking, thinkingSteps } = useAgent();
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -51,8 +51,15 @@ export function AgentPalette() {
       query: lang === "de" ? "Plan für die Pollen-Spitze" : "Plan for the pollen peak",
     },
     {
-      label: lang === "de" ? "Mittagessen loggen" : "Log my lunch",
-      query: lang === "de" ? "Mittagessen loggen" : "Log my lunch",
+      label: lang === "de" ? "Mittagessen loggen" : "Log lunch",
+      query: lang === "de" ? "Mittagessen loggen" : "Log lunch",
+    },
+    {
+      label: lang === "de" ? "Woche nachtragen" : "Backfill week",
+      query:
+        lang === "de"
+          ? "Ich habe letzte Woche vergessen: ungefähr dreimal Fast Food, schlecht geschlafen und die Ellenbogen wurden um Donnerstag juckig. Bitte ungefähr nachtragen."
+          : "Last week I forgot to track. I ate fast food three times, slept badly, and my elbows got itchy around Thursday. Backfill it approximately.",
     },
     {
       label: lang === "de" ? "Schlimmster Tag?" : "Worst day?",
@@ -222,7 +229,7 @@ export function AgentPalette() {
             {visibleMessages.map((m) => (
               <MessageRow key={m.id} message={m} lang={lang} />
             ))}
-            {thinking && <ThinkingRow lang={lang} />}
+            {thinking && <ThinkingRow lang={lang} steps={thinkingSteps} />}
           </div>
         )}
 

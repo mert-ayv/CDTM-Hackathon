@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   createAgentReceipt,
   createDiaryEntry,
@@ -5,13 +6,15 @@ import {
   createTreatmentApplication,
   DEMO_USER_ID,
 } from "../api";
-import { MiniSpark, RankedBars, RiskGauge, SCORADChart } from "../charts";
+import { RankedBars, RiskGauge, SCORADChart } from "../charts";
 import type { DermaTrackData, Lang } from "../data";
 import { Icon } from "../icons";
 import type { Route } from "../shell";
 import type { ChatMessage } from "./AgentChat";
 import {
+  BackfillDraftArtifact,
   ConfirmCard,
+  FlareDetectiveArtifact,
   FlareLoggedArtifact,
   LetterPreviewArtifact,
   MealLoggedArtifact,
@@ -31,10 +34,6 @@ export function seedMessages(
   lang: Lang,
   onRoute: (r: Route) => void,
 ): ChatMessage[] {
-  const recent7 = data.days.slice(-7);
-  const lastWeekAvg = data.days.slice(-14, -7).reduce((s, d) => s + d.scorad, 0) / 7;
-  const thisWeekAvg = recent7.reduce((s, d) => s + d.scorad, 0) / 7;
-  const delta = thisWeekAvg - lastWeekAvg;
   const peak = data.forecast.reduce((a, b) => (a.risk > b.risk ? a : b));
   const peakIdx = data.forecast.indexOf(peak);
   const peakDay =
@@ -52,8 +51,8 @@ export function seedMessages(
 
   const briefing =
     lang === "de"
-      ? `Guten Morgen, Lena.\nDeine Haut erholt sich — und ich habe drei Muster gefunden, die du kennen solltest.`
-      : `Good morning, Lena.\nYour skin is recovering — and I've found three patterns you should know about.`;
+      ? `Deine Haut erholt sich — und ich habe drei Muster gefunden, die du kennen solltest.`
+      : `Your skin is recovering — and I've found three patterns you should know about.`;
 
   return [
     {
@@ -63,73 +62,100 @@ export function seedMessages(
       ts: new Date(),
       text: briefing,
       widget: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* Stat ribbon */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 18,
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-              color: "var(--ink-2)",
-              padding: "10px 14px",
-              border: "1px solid var(--line)",
-              borderRadius: 14,
-              background: "var(--card)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
-            <Stat label="7d ⌀" value={thisWeekAvg.toFixed(1)} />
-            <Stat
-              label={lang === "de" ? "Δ Vorwoche" : "Δ prev"}
-              value={(delta < 0 ? "↓" : "↑") + " " + Math.abs(delta).toFixed(1)}
-              accent={delta < 0 ? "var(--sage-d)" : "var(--clay-d)"}
-            />
-            <Stat
-              label={lang === "de" ? "Spitze" : "Peak"}
-              value={Math.round(peak.risk * 100) + "%"}
-              accent="var(--clay-d)"
-            />
-            <Stat label={lang === "de" ? "Streak" : "streak"} value={`${data.streak}d`} />
-            <span
-              style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "var(--ink-3)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                {lang === "de" ? "Verlauf 14d" : "trend 14d"}
-              </span>
-              <MiniSpark
-                values={data.days.slice(-14).map((d) => d.scorad)}
-                width={70}
-                height={20}
-                color="var(--sage-d)"
-              />
-            </span>
-          </div>
+        <HeroBriefingWidget data={data} lang={lang} peak={peak} peakDay={peakDay} onRoute={onRoute} />
+      ),
+    },
+  ];
+}
 
-          {/* 3-tile dossier */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.5fr 1fr 1fr",
-              gap: 14,
-            }}
-          >
+function HeroBriefingWidget({
+  data,
+  lang,
+  peak,
+  peakDay,
+  onRoute,
+}: {
+  data: DermaTrackData;
+  lang: Lang;
+  peak: DermaTrackData["forecast"][number];
+  peakDay: string;
+  onRoute: (r: Route) => void;
+}) {
+  const [stage, setStage] = useState(0);
+  const draftingLabels =
+    lang === "de"
+      ? [
+          "Verlauf wird als Trend-Insight formuliert",
+          "Auslöser werden nach Signalstärke sortiert",
+          "Muster wird als Nutzer-Insight geschrieben",
+          "Nächste Aktion wird vorgeschlagen",
+        ]
+      : [
+          "Drafting trend insight from 30 days",
+          "Ranking triggers by signal strength",
+          "Writing the individual pattern insight",
+          "Preparing the next recommended action",
+        ];
+
+  useEffect(() => {
+    setStage(0);
+    const timers = [1850, 2800, 3800, 4800, 5650].map((delay, index) =>
+      window.setTimeout(() => setStage(index + 1), delay),
+    );
+    return () => timers.forEach(window.clearTimeout);
+  }, [data.today.date, lang]);
+
+  const activeLabel = draftingLabels[Math.min(stage, draftingLabels.length - 1)];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {stage < 5 && (
+        <div
+          className="dt-briefing-draft"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            color: "var(--sage-d)",
+            fontSize: 11,
+            fontWeight: 800,
+            fontFamily: "var(--font-mono)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          <span className="dt-think-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+          <span>{activeLabel}</span>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.45fr 0.95fr 0.95fr",
+          gap: 12,
+          alignItems: "stretch",
+          gridAutoRows: "1fr",
+        }}
+      >
+        {stage >= 1 && (
+          <div className="dt-stream-card">
             <DossierTile
               eyebrow={lang === "de" ? "01 · Verlauf" : "01 · Trend"}
               title={lang === "de" ? "SCORAD · 30 Tage" : "SCORAD · 30 days"}
-              caption={`⌀ 22.4 · min 14.6 · max 31.2 · Δ −4.1`}
+              caption={`ø 22.4 · min 14.6 · max 31.2 · Δ -4.1`}
             >
               <SCORADChart days={data.days} height={150} width={460} highlightToday />
             </DossierTile>
+          </div>
+        )}
 
+        {stage >= 2 && (
+          <div className="dt-stream-card">
             <DossierTile
               eyebrow={lang === "de" ? "02 · Auslöser" : "02 · Triggers"}
               title={lang === "de" ? "Top 3 aktiv" : "Top 3 active"}
@@ -138,50 +164,38 @@ export function seedMessages(
             >
               <RankedBars items={data.triggers.slice(0, 3)} lang={lang} />
             </DossierTile>
+          </div>
+        )}
 
+        {stage >= 3 && (
+          <div className="dt-stream-card">
             <DossierTile
               eyebrow={lang === "de" ? "03 · Erkenntnis" : "03 · Insight"}
               title={data.insights[lang][0].title}
               accent="var(--clay)"
             >
               <div className="serif" style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                „{data.insights[lang][0].body}"
+                "{data.insights[lang][0].body}"
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
                 <span className="pill clay">Histamin</span>
                 <span className="pill neutral">+2.4</span>
                 <span className="pill neutral">~24h</span>
-                <span className="pill neutral">3×</span>
+                <span className="pill neutral">3x</span>
               </div>
             </DossierTile>
           </div>
+        )}
+      </div>
 
-          <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)", marginTop: 4 }}>
-            {lang === "de"
-              ? `Birkenpollen-Spitze ${peakDay} (${Math.round(peak.risk * 100)}% Risiko). Soll ich einen Plan vorschlagen?`
-              : `Birch pollen peaks ${peakDay} (${Math.round(peak.risk * 100)}% risk). Want me to draft a plan?`}
-          </div>
+      {stage >= 4 && (
+        <div className="dt-stream-card" style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
+          {lang === "de"
+            ? `Birkenpollen-Spitze ${peakDay} (${Math.round(peak.risk * 100)}% Risiko). Soll ich einen Plan vorschlagen?`
+            : `Birch pollen peaks ${peakDay} (${Math.round(peak.risk * 100)}% risk). Want me to draft a plan?`}
         </div>
-      ),
-    },
-  ];
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <span style={{ display: "inline-flex", flexDirection: "column", gap: 1 }}>
-      <span
-        style={{
-          fontSize: 9,
-          color: "var(--ink-3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-        }}
-      >
-        {label}
-      </span>
-      <span style={{ fontWeight: 700, color: accent || "var(--ink)", fontSize: 13 }}>{value}</span>
-    </span>
+      )}
+    </div>
   );
 }
 
@@ -207,6 +221,8 @@ function DossierTile({ eyebrow, title, caption, accent, onOpen, children }: Doss
         display: "flex",
         flexDirection: "column",
         gap: 8,
+        height: "100%",
+        minHeight: 224,
         cursor: onOpen ? "pointer" : "default",
         ...(accent ? { borderTop: `3px solid ${accent}` } : {}),
       }}
@@ -262,6 +278,172 @@ export function computeReply(
 ): ChatMessage {
   const q = query.toLowerCase();
   const ts = new Date();
+
+  if (
+    q.includes("backfill") ||
+    q.includes("forgot") ||
+    q.includes("last week") ||
+    q.includes("approximately") ||
+    q.includes("approximate") ||
+    q.includes("fast food") ||
+    q.includes("slept badly") ||
+    q.includes("vergessen") ||
+    q.includes("letzte woche") ||
+    q.includes("ungefähr")
+  ) {
+    const monday = new Date(data.today.date);
+    monday.setDate(monday.getDate() - 12);
+    monday.setHours(12, 0, 0, 0);
+    const weekDates = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + index);
+      return date;
+    });
+    const diaryPayloads = weekDates.map((date, index) => ({
+      userId: DEMO_USER_ID,
+      occurredAt: date.toISOString(),
+      food:
+        index === 1 || index === 3 || index === 4
+          ? [
+              {
+                name: index === 3 ? "Pizza" : "Fast food",
+                mealType: index === 1 ? "dinner" : "lunch",
+                triggerCategories: ["dairy", "gluten", "histamine"],
+                notes: "Estimated from natural-language backfill.",
+              },
+            ]
+          : [],
+      stress: { level: index >= 3 ? 7 : 5, source: "agent-estimated-backfill" },
+      sleep: { hours: index >= 2 && index <= 5 ? 5.6 : 6.8, quality: index >= 2 && index <= 5 ? 2 : 3 },
+      activeRashes:
+        index === 3 || index === 4
+          ? [
+              {
+                bodyRegionId: "arm-l-flex",
+                side: "front",
+                itchiness: index === 4 ? 8 : 6.5,
+                dryness: 6.2,
+                redness: 6.8,
+                active: true,
+                notes: "Estimated elbow flare from user memory.",
+              },
+              {
+                bodyRegionId: "arm-r-flex",
+                side: "front",
+                itchiness: index === 4 ? 8 : 6.5,
+                dryness: 6.2,
+                redness: 6.8,
+                active: true,
+                notes: "Estimated elbow flare from user memory.",
+              },
+            ]
+          : [],
+      notes: "Estimated backfill from Derma Agent. Source: user memory, not exact daily log.",
+    }));
+    const flareDate = weekDates[4] ?? data.today.date;
+    const treatmentDates = [weekDates[4], weekDates[5]].filter(Boolean);
+
+    return {
+      id: newId(),
+      role: "agent",
+      ts,
+      text:
+        lang === "de"
+          ? `Ich kann die Lücke rekonstruieren, ohne so zu tun, als wären es exakte Messwerte. Ich markiere alles als geschätzt, speichere die Quelle als Nutzer-Erinnerung und halte offene Details sichtbar.`
+          : `I can reconstruct the gap without pretending it is exact. I’ll mark the records as estimated, preserve the source as user memory, and keep the missing details visible.`,
+      widget: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <BackfillDraftArtifact lang={lang} onRoute={onRoute} />
+          <ConfirmCard
+            lang={lang}
+            onConfirm={() =>
+              Promise.all([
+                ...diaryPayloads.map((payload) => createDiaryEntry(payload)),
+                createFlareObservation({
+                  userId: DEMO_USER_ID,
+                  observedAt: flareDate.toISOString(),
+                  bodyRegionId: "arm-l-flex",
+                  side: "front",
+                  intensity: 4,
+                  itchiness: 8,
+                  dryness: 6.2,
+                  redness: 6.8,
+                  scorradTotal: data.today.scorad + 3.8,
+                  notes: "Estimated from natural-language backfill: elbows itchy around Thursday/Friday.",
+                }),
+                ...treatmentDates.map((date) =>
+                  createTreatmentApplication({
+                    userId: DEMO_USER_ID,
+                    medicationId: "mometason",
+                    appliedAt: date.toISOString(),
+                    bodyRegionId: "arm-l-flex",
+                    amount: "thin layer",
+                    notes: "Estimated treatment application from natural-language backfill.",
+                  }),
+                ),
+                createAgentReceipt({
+                  userId: DEMO_USER_ID,
+                  kind: "backfill.applied",
+                  payload: {
+                    range: "last-week",
+                    estimated: true,
+                    source: "natural-language-user-memory",
+                    records: {
+                      diaryEntries: 7,
+                      foodEvents: 3,
+                      poorSleepNights: 4,
+                      flareObservations: 1,
+                      treatmentApplications: 2,
+                    },
+                    missingFields: ["exact meals", "exact severity per day", "photo evidence"],
+                  },
+                }),
+              ])
+            }
+            proposal={{
+              title: lang === "de" ? "Geschätzte Woche anwenden" : "Apply approximate week",
+              summary:
+                lang === "de"
+                  ? "7 Tage · 3 Fast-Food-Ereignisse · 4 schlechte Nächte · Ellenbogen-Flare · 2× Mometason · alles als geschätzt markiert"
+                  : "7 days · 3 fast-food events · 4 poor-sleep nights · elbow flare · 2x mometasone · all marked estimated",
+              confirmLabel: lang === "de" ? "Backfill anwenden" : "Apply backfill",
+              declineLabel: lang === "de" ? "Nicht speichern" : "Don’t save",
+              icon: <Icon.sparkle size={16} color="var(--sage-d)" />,
+              accent: "var(--sage)",
+            }}
+            success={{
+              title: lang === "de" ? "Geschätzte Woche gespeichert" : "Approximate week saved",
+              artifact: (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <SyncReceipt
+                    label={lang === "de" ? "7 Tage rekonstruiert" : "7 days reconstructed"}
+                    detail={lang === "de" ? "Geschätzt · Nutzer bestätigt · Quelle: Erinnerung" : "Estimated · user-confirmed · source: memory"}
+                    lang={lang}
+                    onRoute={onRoute}
+                    route="entry"
+                  />
+                  <SyncReceipt
+                    label={lang === "de" ? "Haut- und Therapie-Zeitachse ergänzt" : "Skin and treatment timeline updated"}
+                    detail={lang === "de" ? "Ellenbogen-Flare · 2× Mometason · Arztbrief-Kontext aktualisiert" : "Elbow flare · 2x mometasone · doctor-letter context updated"}
+                    lang={lang}
+                    onRoute={onRoute}
+                    route="skin"
+                  />
+                  <SyncReceipt
+                    label={lang === "de" ? "Provenienz gespeichert" : "Provenance saved"}
+                    detail={lang === "de" ? "Backfill-Receipt · geschätzt · keine Foto-Evidenz" : "Backfill receipt · estimated · no photo evidence"}
+                    lang={lang}
+                    onRoute={onRoute}
+                    route="letter"
+                  />
+                </div>
+              ),
+            }}
+          />
+        </div>
+      ),
+    };
+  }
 
   if (
     (q.includes("pasta") || q.includes("cheese") || q.includes("käse") || q.includes("ate") || q.includes("gegessen")) &&
@@ -558,7 +740,7 @@ Want me to log it as lunch at 12:30?`,
     q.includes("permission") ||
     q.includes("praxis sehen") ||
     q.includes("epa") ||
-    q.includes("teilen") && (q.includes("daten") || q.includes("data")) ||
+    (q.includes("teilen") && (q.includes("daten") || q.includes("data"))) ||
     q.includes("wer sieht") ||
     q.includes("who sees") ||
     q.includes("share data")
@@ -572,6 +754,7 @@ Want me to log it as lunch at 12:30?`,
           ? `Aktuell sind drei Verbindungen aktiv: Dr. Lehmann (TI-Messenger · 4 Kategorien), ePA (gematik · 5 Kategorien), Apple Health (Lesezugriff · 1 Kategorie). Voll-Audit der letzten 14 Tage liegt vor — keine ungewöhnlichen Zugriffe.`
           : `Three active connections right now: Dr. Lehmann (TI-Messenger · 4 categories), ePA (gematik · 5 categories), Apple Health (read-only · 1 category). Full audit for the last 14 days is on file — no unusual access.`,
       widget: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div
           style={{
             display: "flex",
@@ -661,6 +844,48 @@ Want me to log it as lunch at 12:30?`,
             {lang === "de" ? "Datenfreigabe verwalten" : "Manage connections"}
             <Icon.arrowRight size={11} color="var(--sage-d)" />
           </button>
+        </div>
+          <ConfirmCard
+            lang={lang}
+            onConfirm={() =>
+              createAgentReceipt({
+                userId: DEMO_USER_ID,
+                kind: "privacy.audit.saved",
+                payload: {
+                  windowDays: 14,
+                  connections: ["Dr. Lehmann", "ePA", "Apple Health"],
+                  blockedCategories: ["raw-photos", "voice-notes"],
+                  unusualAccess: false,
+                },
+              })
+            }
+            proposal={{
+              title: lang === "de" ? "Privacy-Review speichern" : "Save privacy review",
+              summary:
+                lang === "de"
+                  ? "Agent speichert einen Audit-Beleg: Rohfotos und Voice Notes bleiben gesperrt, Praxis sieht nur Berichtsdaten."
+                  : "Agent saves an audit receipt: raw photos and voice notes stay blocked, clinic sees report data only.",
+              confirmLabel: lang === "de" ? "Audit speichern" : "Save audit",
+              icon: <Icon.check size={16} color="var(--sage-d)" />,
+              accent: "var(--sage)",
+            }}
+            success={{
+              title: lang === "de" ? "Audit-Beleg gespeichert" : "Audit receipt saved",
+              artifact: (
+                <SyncReceipt
+                  label={lang === "de" ? "Privacy-Agent hat Freigaben geprüft" : "Privacy agent reviewed access"}
+                  detail={
+                    lang === "de"
+                      ? "14 Tage · 3 Verbindungen · 0 ungewöhnliche Zugriffe"
+                      : "14 days · 3 connections · 0 unusual accesses"
+                  }
+                  lang={lang}
+                  onRoute={onRoute}
+                  route="connections"
+                />
+              ),
+            }}
+          />
         </div>
       ),
     };
@@ -765,33 +990,13 @@ Want me to log it as lunch at 12:30?`,
       ts,
       text:
         lang === "de"
-          ? `Den schwersten Tag (SCORAD ${worst.scorad.toFixed(1)}) habe ich auf drei gestapelte Signale zurückgeführt:
+          ? `Ich habe den schwersten Tag (SCORAD ${worst.scorad.toFixed(1)}) als Untersuchung geöffnet. Die wahrscheinlichste Erklärung ist kein einzelner Auslöser, sondern ein Stack: Histamin am Vorabend, Schlafdefizit und Birkenpollen am Peak-Tag.
 
-· Vorabend: Rotwein + reifer Käse (Histamin)
-· Schlaf nur ${worst.sleepH}h
-· Birkenpollen ${worst.birchPollen}/4
+Ich habe Gegenbeweise markiert und daraus einen 48h-Testplan abgeleitet.`
+          : `I opened the worst day (SCORAD ${worst.scorad.toFixed(1)}) as an investigation. The likely explanation is not one trigger, but a stack: histamine the evening before, sleep debt and birch pollen on the peak day.
 
-Effektgröße zusammen: ~+5.8 SCORAD ggü. Baseline.`
-          : `I traced the worst day (SCORAD ${worst.scorad.toFixed(1)}) to three signals that stacked:
-
-· Night before: red wine + aged cheese (histamine)
-· Sleep only ${worst.sleepH}h
-· Birch pollen ${worst.birchPollen}/4
-
-Combined effect: ~+5.8 SCORAD vs. baseline.`,
-      widget: (
-        <div
-          style={{
-            padding: 14,
-            border: "1px solid var(--line)",
-            borderRadius: 14,
-            background: "var(--card)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <RankedBars items={data.triggers.slice(0, 3)} lang={lang} />
-        </div>
-      ),
+I marked counter-evidence and turned it into a 48h test plan.`,
+      widget: <FlareDetectiveArtifact data={data} lang={lang} onRoute={onRoute} />,
     };
   }
 

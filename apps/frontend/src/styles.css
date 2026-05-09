@@ -111,6 +111,12 @@ button:focus-visible {
   100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--clay) 0%, transparent); }
 }
 
+@keyframes dt-agent-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--sage) 42%, transparent); }
+  72% { box-shadow: 0 0 0 10px color-mix(in oklch, var(--sage) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--sage) 0%, transparent); }
+}
+
 @keyframes dt-think {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
   40% { transform: translateY(-3px); opacity: 1; }
@@ -133,6 +139,15 @@ button:focus-visible {
 .dt-think-dots span:nth-child(2) { animation-delay: 0.18s; }
 .dt-think-dots span:nth-child(3) { animation-delay: 0.36s; }
 
+.dt-record-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--clay);
+  box-shadow: 0 0 0 0 color-mix(in oklch, var(--clay) 50%, transparent);
+  animation: dt-pulse 1.1s infinite ease-out;
+}
+
 @keyframes dt-fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -140,6 +155,150 @@ button:focus-visible {
 
 .dt-msg {
   animation: dt-fade-in 240ms ease-out;
+}
+
+@keyframes dt-stream-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.dt-stream-card {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  animation: dt-stream-card-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+.dt-briefing-draft {
+  animation: dt-fade-in 220ms ease-out both;
+}
+
+@keyframes dt-boot-orb-float {
+  0% { transform: translate3d(-3px, 2px, 0) scale(0.98); }
+  45% { transform: translate3d(5px, -5px, 0) scale(1.03); }
+  100% { transform: translate3d(-3px, 2px, 0) scale(0.98); }
+}
+
+@keyframes dt-boot-orb-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklch, var(--sage) 28%, transparent),
+      0 12px 34px -14px color-mix(in oklch, var(--sage-d) 58%, transparent);
+    opacity: 0.88;
+  }
+  52% {
+    box-shadow:
+      0 0 0 13px color-mix(in oklch, var(--sage) 0%, transparent),
+      0 18px 44px -14px color-mix(in oklch, var(--sage-d) 70%, transparent);
+    opacity: 1;
+  }
+}
+
+@keyframes dt-boot-caret {
+  0%, 48% { opacity: 1; }
+  49%, 100% { opacity: 0; }
+}
+
+@keyframes dt-boot-type-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes dt-boot-module-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.dt-boot-orb {
+  position: relative;
+  width: var(--dt-boot-orb-size, 44px);
+  height: var(--dt-boot-orb-size, 44px);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 34% 28%, #fff 0 10%, transparent 28%),
+    radial-gradient(circle at 62% 70%, var(--sage) 0, transparent 52%),
+    linear-gradient(135deg, var(--sage-2), var(--sage-d));
+  animation:
+    dt-boot-orb-float 4.8s ease-in-out infinite,
+    dt-boot-orb-pulse 2.6s ease-out infinite;
+  will-change: transform, opacity, box-shadow;
+}
+
+.dt-boot-orb::after {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  border-radius: inherit;
+  border: 1px solid oklch(0.98 0.02 230 / 0.62);
+  opacity: 0.65;
+}
+
+.dt-boot-type {
+  display: inline-block;
+  max-width: max-content;
+  overflow: hidden;
+  white-space: nowrap;
+  animation: dt-boot-type-reveal var(--dt-boot-type-duration, 1.4s) steps(var(--dt-boot-type-steps, 24), end) both;
+}
+
+.dt-boot-caret {
+  display: inline-block;
+  width: 0.08em;
+  height: 1em;
+  margin-left: 0.16em;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: dt-boot-caret 900ms steps(1, end) infinite;
+}
+
+.dt-boot-module {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: dt-boot-module-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--dt-boot-delay, 0ms);
+  will-change: transform, opacity, filter;
+}
+
+.dt-boot-module-1 { --dt-boot-delay: 80ms; }
+.dt-boot-module-2 { --dt-boot-delay: 180ms; }
+.dt-boot-module-3 { --dt-boot-delay: 280ms; }
+.dt-boot-module-4 { --dt-boot-delay: 380ms; }
+.dt-boot-module-5 { --dt-boot-delay: 480ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-boot-orb,
+  .dt-boot-type,
+  .dt-boot-caret,
+  .dt-boot-module,
+  .dt-stream-card,
+  .dt-briefing-draft {
+    animation: none;
+  }
+
+  .dt-boot-module,
+  .dt-stream-card,
+  .dt-briefing-draft {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
 }
 
 .app-shell {
@@ -310,6 +469,7 @@ button:focus-visible {
 }
 
 .topbar-actions {
+  margin-left: auto;
   display: flex;
   gap: 8px;
   align-items: center;

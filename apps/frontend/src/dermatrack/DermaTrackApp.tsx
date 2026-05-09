@@ -54,13 +54,13 @@ export function DermaTrackApp() {
       <div className="app-shell">
         <Sidebar route={route} onRoute={setRoute} lang={lang} />
         <div className="scroll" style={{ height: "100vh" }}>
-          <Topbar route={route} lang={lang} onLang={setLang} onRoute={setRoute} apiStatus={apiStatus} />
+          <Topbar route={route} lang={lang} onLang={setLang} onRoute={setRoute} />
           <div className="main">
             <Screen data={DT_DATA} lang={lang} onRoute={setRoute} apiStatus={apiStatus} />
           </div>
         </div>
       </div>
-      <AgentTrigger />
+      {route !== "today" && <AgentTrigger />}
       <AgentPalette />
     </AgentProvider>
   );

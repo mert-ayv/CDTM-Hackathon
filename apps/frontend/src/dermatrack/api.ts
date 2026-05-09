@@ -127,3 +127,29 @@ export async function createAgentReceipt(payload: unknown): Promise<SaveResult> 
     return { source: "local", data: persistDemoEvent("dermatrack:agent-receipts", payload) };
   }
 }
+
+export async function transcribeVoiceInput(audio: Blob): Promise<SaveResult<{ text: string; model?: string }>> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/agent/transcribe`, {
+      method: "POST",
+      body: audio,
+      signal: controller.signal,
+      headers: {
+        "content-type": audio.type || "audio/webm",
+      },
+    });
+
+    const data = (await response.json().catch(() => ({}))) as { text?: string; model?: string; message?: string };
+
+    if (!response.ok || !data.text) {
+      throw new Error(data.message || `Transcription failed (${response.status})`);
+    }
+
+    return { source: "backend", data: { text: data.text, model: data.model } };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
