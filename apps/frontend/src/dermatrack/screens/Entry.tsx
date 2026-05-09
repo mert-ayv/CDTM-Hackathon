@@ -1,300 +1,318 @@
-import { useState } from "react";
-import { fmtDate, fmtTime, useT } from "../i18n";
+import { useEffect, useState } from "react";
+import { DayStrip } from "../components/DayStrip";
+import type { Food } from "../data";
+import { fmtDate, fmtDay, fmtTime, useT } from "../i18n";
 import { Icon } from "../icons";
 import { Btn, PageHead } from "../shell";
 import type { ScreenProps } from "./types";
 
-type VoiceState = "idle" | "listening" | "done";
+const ACTIVITIES = [
+  { id: "lauf", de: "Laufen", en: "Running" },
+  { id: "yoga", de: "Yoga", en: "Yoga" },
+  { id: "rad", de: "Radfahren", en: "Cycling" },
+  { id: "kraft", de: "Krafttraining", en: "Strength" },
+  { id: "spazier", de: "Spaziergang", en: "Walk" },
+  { id: "keine", de: "Keine", en: "None" },
+] as const;
+
+interface MealSlot {
+  id: string;
+  time: string;
+  label: { de: string; en: string };
+  foods: Food[];
+  hasPhoto: boolean;
+}
+
+function makeMealSlots(foods: Food[], hasDayPhoto: boolean): MealSlot[] {
+  const breakfast = foods.slice(0, 2);
+  const lunch = foods.slice(2, 4);
+  const dinner = foods.slice(4, 6);
+  return [
+    {
+      id: "breakfast",
+      time: "08:15",
+      label: { de: "Frühstück", en: "Breakfast" },
+      foods: breakfast,
+      hasPhoto: false,
+    },
+    {
+      id: "lunch",
+      time: "12:30",
+      label: { de: "Mittag", en: "Lunch" },
+      foods: lunch,
+      hasPhoto: hasDayPhoto,
+    },
+    {
+      id: "dinner",
+      time: "19:00",
+      label: { de: "Abend", en: "Dinner" },
+      foods: dinner,
+      hasPhoto: false,
+    },
+  ];
+}
 
 export function Entry({ data, lang, onRoute }: ScreenProps) {
   const t = useT(lang);
-  const today = data.today;
-  const [voice, setVoice] = useState<VoiceState>("done");
-  const [stress, setStress] = useState(today.stress);
-  const [sleep, setSleep] = useState(today.sleepH);
-  const [activity, setActivity] = useState(today.activity.id);
+  const todayIdx = data.days.length - 1;
+  const [selectedIdx, setSelectedIdx] = useState(todayIdx);
+  const selectedDay = data.days[selectedIdx];
+  const isToday = selectedIdx === todayIdx;
 
-  const meal = [
-    { de: "Pasta", en: "Pasta", tags: ["Gluten"] },
-    { de: "Tomatensauce", en: "Tomato sauce", tags: ["Histamin"] },
-    { de: "Parmesan", en: "Parmesan", tags: ["Milch", "Histamin"] },
-    { de: "Basilikum", en: "Basil", tags: [] },
-  ];
+  const [meals, setMeals] = useState<MealSlot[]>(() =>
+    makeMealSlots(selectedDay.foods, selectedDay.hasPhoto),
+  );
+  const [stress, setStress] = useState(selectedDay.stress);
+  const [sleep, setSleep] = useState(selectedDay.sleepH);
+  const [activity, setActivity] = useState(selectedDay.activity.id);
+  const [itch, setItch] = useState(selectedDay.itch);
+  const [moisturizer, setMoisturizer] = useState(selectedDay.meds.includes("pflege") ? 2 : 0);
+
+  useEffect(() => {
+    setMeals(makeMealSlots(selectedDay.foods, selectedDay.hasPhoto));
+    setStress(selectedDay.stress);
+    setSleep(selectedDay.sleepH);
+    setActivity(selectedDay.activity.id);
+    setItch(selectedDay.itch);
+    setMoisturizer(selectedDay.meds.includes("pflege") ? 2 : 0);
+  }, [selectedIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const togglePhoto = (id: string) =>
+    setMeals((ms) => ms.map((m) => (m.id === id ? { ...m, hasPhoto: !m.hasPhoto } : m)));
+
+  const removeFood = (mealId: string, foodId: string) =>
+    setMeals((ms) =>
+      ms.map((m) => (m.id === mealId ? { ...m, foods: m.foods.filter((f) => f.id !== foodId) } : m)),
+    );
+
+  const dayLabel = isToday
+    ? lang === "de"
+      ? "Heute"
+      : "Today"
+    : `${fmtDay(selectedDay.date, lang)} · ${fmtDate(selectedDay.date, lang)}`;
 
   return (
     <div className="main-inner">
       <PageHead
-        kicker={fmtDate(today.date, lang) + " · " + fmtTime(new Date(), lang)}
+        kicker={
+          isToday
+            ? fmtDate(selectedDay.date, lang) + " · " + fmtTime(new Date(), lang)
+            : (lang === "de" ? "Bearbeite Eintrag · " : "Editing entry · ") +
+              fmtDate(selectedDay.date, lang)
+        }
         title={t("app_eintrag")}
         sub={
           lang === "de"
-            ? "Sprich es ein, fotografiere deine Mahlzeit, justiere die Tagesform — die KI verknüpft alles im Hintergrund mit deinem Hautbild."
-            : "Dictate, snap your meal, adjust your daily state — AI links everything to your skin pattern in the background."
+            ? "Wähle einen Tag und trage Mahlzeiten und Tagesform ein. Fotos sind optional."
+            : "Pick a day, log meals and your daily state. Photos are optional."
         }
         action={
-          <Btn
-            kind="primary"
-            size="md"
-            icon={<Icon.check size={14} color="var(--bg)" />}
-            onClick={() => onRoute("today")}
-          >
-            {t("loggen")}
-          </Btn>
+          <div style={{ display: "flex", gap: 8 }}>
+            {!isToday && (
+              <Btn kind="ghost" size="md" onClick={() => setSelectedIdx(todayIdx)}>
+                {lang === "de" ? "Zu heute" : "Jump to today"}
+              </Btn>
+            )}
+            <Btn
+              kind="primary"
+              size="md"
+              icon={<Icon.check size={14} color="var(--bg)" />}
+              onClick={() => onRoute("today")}
+            >
+              {isToday ? t("loggen") : lang === "de" ? "Speichern" : "Save"}
+            </Btn>
+          </div>
         }
       />
 
-      <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
-        <div className="grid" style={{ gap: 16 }}>
-          <div
-            className="card card-pad"
-            style={{
-              background:
-                voice === "listening"
-                  ? "linear-gradient(135deg, color-mix(in oklch, var(--clay) 18%, var(--card)), var(--card))"
-                  : "var(--card)",
-              transition: "background 200ms",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <button
-                onClick={() => {
-                  if (voice !== "listening") {
-                    setVoice("listening");
-                    setTimeout(() => setVoice("done"), 1800);
-                  }
-                }}
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 999,
-                  background: voice === "listening" ? "var(--clay)" : "var(--ink)",
-                  color: voice === "listening" ? "#fff" : "var(--bg)",
-                  border: "none",
-                  display: "grid",
-                  placeItems: "center",
-                  boxShadow: "0 6px 18px -4px rgba(20,28,40,0.18)",
-                  animation: voice === "listening" ? "dt-pulse 1.2s ease-out infinite" : "none",
-                }}
-              >
-                <Icon.mic size={26} color={voice === "listening" ? "#fff" : "var(--bg)"} />
-              </button>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{t("sprachnotiz")}</div>
-                <div className="serif" style={{ fontSize: 14, color: "var(--ink)", marginTop: 4, lineHeight: 1.5 }}>
-                  {voice === "idle" && (
-                    <span style={{ color: "var(--ink-3)", fontStyle: "normal" }}>{t("voice_hint")}</span>
-                  )}
-                  {voice === "listening" && <span style={{ color: "var(--clay-d)" }}>{t("voice_aktiv")}</span>}
-                  {voice === "done" && "„" + t("voice_transkript") + '"'}
-                </div>
-              </div>
-              {voice === "done" && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn kind="sage" size="sm" icon={<Icon.check size={13} />}>
-                    {t("verstanden")}
-                  </Btn>
-                  <Btn kind="ghost" size="sm" onClick={() => setVoice("idle")}>
-                    {t("bearbeiten")}
-                  </Btn>
-                </div>
-              )}
-            </div>
-          </div>
+      <DayStrip days={data.days} selectedIndex={selectedIdx} onSelect={setSelectedIdx} lang={lang} />
 
-          <div className="card">
-            <div className="card-head">
-              <h3>{t("mahlzeit_foto")}</h3>
-              <span className="head-sub">12:30 · {t("analysiert")}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 0 }}>
+      {/* Section 1 — Nutrition */}
+      <section style={{ marginBottom: 18 }}>
+        <SectionHeader
+          icon={<Icon.bowl size={16} color="var(--sage-d)" />}
+          title={lang === "de" ? "Ernährung" : "Nutrition"}
+          sub={dayLabel}
+          right={
+            <Btn kind="ghost" size="sm" icon={<Icon.plus size={12} />}>
+              {lang === "de" ? "Mahlzeit" : "Meal"}
+            </Btn>
+          }
+        />
+
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+          {meals.map((m) => (
+            <MealCard
+              key={m.id}
+              meal={m}
+              lang={lang}
+              onTogglePhoto={() => togglePhoto(m.id)}
+              onRemoveFood={(foodId) => removeFood(m.id, foodId)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Section 2 — Skin & care today */}
+      <section style={{ marginBottom: 18 }}>
+        <SectionHeader
+          icon={<Icon.droplet size={16} color="var(--sage-d)" />}
+          title={lang === "de" ? "Haut & Pflege" : "Skin & care"}
+          sub={lang === "de" ? "Symptom & wichtigster Hebel" : "Symptom & key lever"}
+        />
+
+        <div className="card">
+          <div
+            className="card-pad"
+            style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 24 }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Icon.pulse size={16} color="oklch(0.66 0.18 25)" />
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{t("juckreiz")}</div>
+                <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                  {lang === "de" ? "(0 = keiner, 10 = unerträglich)" : "(0 = none, 10 = unbearable)"}
+                </span>
+                <span
+                  className="num"
+                  style={{ marginLeft: "auto", fontSize: 16, fontWeight: 700, color: "var(--ink)" }}
+                >
+                  {itch.toFixed(1)}
+                  <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 500 }}>/10</span>
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={0.1}
+                value={itch}
+                onChange={(e) => setItch(+e.target.value)}
+                style={{ width: "100%", accentColor: "oklch(0.66 0.18 25)" }}
+              />
               <div
                 style={{
-                  height: 220,
-                  background: "radial-gradient(circle at 35% 40%, oklch(0.84 0.10 50), oklch(0.66 0.13 38))",
-                  display: "grid",
-                  placeItems: "center",
-                  position: "relative",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 9,
+                  color: "var(--ink-3)",
+                  fontFamily: "var(--font-mono)",
+                  marginTop: 2,
                 }}
               >
-                <svg viewBox="0 0 200 100" width="80%">
-                  <ellipse cx={100} cy={55} rx={68} ry={22} fill="oklch(0.96 0.02 60)" />
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <path
-                      key={i}
-                      d={`M ${50 + i * 16} 50 Q ${58 + i * 16} ${44 + (i % 2) * 4} ${66 + i * 16} 50 T ${82 + i * 16} 50`}
-                      stroke="oklch(0.85 0.12 55)"
-                      strokeWidth={2.5}
-                      fill="none"
-                      strokeLinecap="round"
-                    />
-                  ))}
-                  <circle cx={80} cy={50} r={4} fill="oklch(0.55 0.18 25)" />
-                  <circle cx={120} cy={56} r={4} fill="oklch(0.55 0.18 25)" />
-                  <circle cx={100} cy={48} r={3} fill="oklch(0.78 0.18 140)" />
-                </svg>
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    left: 12,
-                    color: "#fff",
-                    fontSize: 10,
-                    fontFamily: "var(--font-mono)",
-                    background: "rgba(0,0,0,0.4)",
-                    padding: "3px 8px",
-                    borderRadius: 8,
-                  }}
-                >
-                  {fmtTime(new Date(), lang)} · {t("analysiert")}
-                </div>
-              </div>
-              <div style={{ padding: 18 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "var(--ink-3)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    marginBottom: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  {t("zutaten")}{" "}
-                  <span className="pill sage" style={{ height: 18 }}>
-                    <Icon.sparkle size={10} /> KI
-                  </span>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {meal.map((ing, i) => (
-                    <span key={i} className={"pill " + (ing.tags.length ? "clay" : "neutral")}>
-                      {ing[lang]}
-                      {ing.tags.length > 0 && (
-                        <span style={{ opacity: 0.7, fontSize: 10 }}>· {ing.tags[0]}</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    marginTop: 14,
-                    padding: "10px 12px",
-                    background: "var(--bg-2)",
-                    borderRadius: 10,
-                    fontSize: 12,
-                    color: "var(--ink-2)",
-                    lineHeight: 1.5,
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 8,
-                  }}
-                >
-                  <Icon.info size={14} color="var(--clay-d)" style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>
-                    <b>{lang === "de" ? "Histamin-reich" : "Histamine-rich"}</b> —{" "}
-                    {lang === "de"
-                      ? "überwache Symptome in den nächsten 24 h."
-                      : "watch symptoms over the next 24 h."}
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                  <Btn kind="sage" size="sm" icon={<Icon.check size={13} />}>
-                    {t("stimmt")}
-                  </Btn>
-                  <Btn kind="ghost" size="sm">
-                    {t("bearbeiten")}
-                  </Btn>
-                </div>
+                <span>0</span>
+                <span>5</span>
+                <span>10</span>
               </div>
             </div>
-          </div>
 
-          <div className="card">
-            <div className="card-head">
-              <h3>{lang === "de" ? "Heute · Mahlzeiten" : "Today · meals"}</h3>
-              <span className="head-sub">
-                {today.foods.length} {today.foods.length === 1 ? t("mahlzeit") : t("mahlzeiten")}
-              </span>
-            </div>
-            <div style={{ padding: "8px 0" }}>
-              {[
-                {
-                  time: "08:15",
-                  label: lang === "de" ? "Haferflocken, Banane, Joghurt" : "Oats, banana, yogurt",
-                  tag: null,
-                },
-                {
-                  time: "12:30",
-                  label:
-                    lang === "de" ? "Pasta mit Tomatensauce, Parmesan" : "Pasta with tomato sauce, parmesan",
-                  tag: "Histamin",
-                },
-                { time: "15:50", label: lang === "de" ? "Apfel, grüner Tee" : "Apple, green tea", tag: null },
-              ].map((m, i) => (
-                <div key={i} className="row" style={{ gridTemplateColumns: "60px 1fr auto" }}>
-                  <span className="num" style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 600 }}>
-                    {m.time}
-                  </span>
-                  <span style={{ fontSize: 13 }}>{m.label}</span>
-                  {m.tag && <span className="pill clay">{m.tag}</span>}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Icon.droplet size={16} color="var(--sage-d)" />
+                <div style={{ fontSize: 12, fontWeight: 700 }}>
+                  {lang === "de" ? "Pflege heute" : "Moisturizer today"}
                 </div>
-              ))}
+                <span
+                  className="num"
+                  style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}
+                >
+                  {moisturizer === 0 ? "—" : moisturizer === 3 ? "3+×" : `${moisturizer}×`}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {[
+                  { v: 0, label: "0" },
+                  { v: 1, label: "1×" },
+                  { v: 2, label: "2×" },
+                  { v: 3, label: "3+×" },
+                ].map((opt) => {
+                  const active = moisturizer === opt.v;
+                  return (
+                    <button
+                      key={opt.v}
+                      onClick={() => setMoisturizer(opt.v)}
+                      style={{
+                        flex: 1,
+                        height: 36,
+                        borderRadius: 8,
+                        border: "1px solid " + (active ? "var(--sage-d)" : "var(--line)"),
+                        background: active
+                          ? "color-mix(in oklch, var(--sage) 28%, var(--card))"
+                          : "var(--card)",
+                        color: active ? "var(--sage-d)" : "var(--ink-2)",
+                        fontWeight: 700,
+                        fontSize: 12,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="grid" style={{ gap: 16 }}>
-          <div className="card">
-            <div className="card-head">
-              <h3>{lang === "de" ? "Tagesform" : "Daily state"}</h3>
-              <span className="head-sub">{lang === "de" ? "manuell" : "manual"}</span>
-            </div>
-            <div className="card-pad">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Icon.bolt size={18} color="var(--clay-d)" />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{t("stress")}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{t("stress_skala")}</div>
-                </div>
+      {/* Section 3 — Daily state */}
+      <section>
+        <SectionHeader
+          icon={<Icon.pulse size={16} color="var(--clay-d)" />}
+          title={lang === "de" ? "Tagesform" : "Daily state"}
+          sub={lang === "de" ? "Schlaf, Stress, Bewegung" : "Sleep, stress, movement"}
+        />
+
+        <div className="card">
+          <div
+            className="card-pad"
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.2fr", gap: 24 }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Icon.bolt size={16} color="var(--clay-d)" />
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{t("stress")}</div>
+                <span
+                  className="num"
+                  style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}
+                >
+                  {stress}/5
+                </span>
               </div>
-              <div style={{ display: "flex", gap: 5, marginTop: 10 }}>
+              <div style={{ display: "flex", gap: 4 }}>
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
                     key={n}
                     onClick={() => setStress(n)}
                     style={{
                       flex: 1,
-                      height: 40,
-                      borderRadius: 10,
+                      height: 36,
+                      borderRadius: 8,
                       border: "1px solid var(--line)",
                       background:
-                        n <= stress ? `oklch(${0.86 - n * 0.04} ${0.05 + n * 0.02} ${65 - n * 8})` : "var(--card)",
+                        n <= stress
+                          ? `oklch(${0.86 - n * 0.04} ${0.05 + n * 0.02} ${65 - n * 8})`
+                          : "var(--card)",
                       color: n <= stress ? "var(--ink)" : "var(--ink-3)",
                       fontWeight: 700,
-                      fontSize: 13,
+                      fontSize: 12,
                     }}
                   >
                     {n}
                   </button>
                 ))}
               </div>
+            </div>
 
-              <div style={{ height: 1, background: "var(--line-2)", margin: "18px 0" }} />
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Icon.moon size={18} color="var(--sage-d)" />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{t("schlaf_letzte")}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                    {lang === "de" ? "Schiebe, um zu setzen" : "Drag to set"}
-                  </div>
-                </div>
-                <div className="num" style={{ fontSize: 22, fontWeight: 700 }}>
-                  {sleep.toFixed(1)}
-                  <span style={{ fontSize: 11, color: "var(--ink-3)", marginLeft: 2 }}>h</span>
-                </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Icon.moon size={16} color="var(--sage-d)" />
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{t("schlaf_letzte")}</div>
+                <span
+                  className="num"
+                  style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}
+                >
+                  {sleep.toFixed(1)}h
+                </span>
               </div>
               <input
                 type="range"
@@ -303,47 +321,38 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
                 step={0.1}
                 value={sleep}
                 onChange={(e) => setSleep(+e.target.value)}
-                style={{ width: "100%", accentColor: "var(--sage-d)", marginTop: 8 }}
+                style={{ width: "100%", accentColor: "var(--sage-d)" }}
               />
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  fontSize: 10,
+                  fontSize: 9,
                   color: "var(--ink-3)",
                   fontFamily: "var(--font-mono)",
+                  marginTop: 2,
                 }}
               >
                 <span>3h</span>
                 <span>6h</span>
                 <span>10h</span>
               </div>
+            </div>
 
-              <div style={{ height: 1, background: "var(--line-2)", margin: "18px 0" }} />
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Icon.run size={18} color="var(--clay-d)" />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{t("bewegung")}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{lang === "de" ? "Heute" : "Today"}</div>
-                </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Icon.run size={16} color="var(--clay-d)" />
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{t("bewegung")}</div>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-                {[
-                  { id: "lauf", de: "Laufen", en: "Running" },
-                  { id: "yoga", de: "Yoga", en: "Yoga" },
-                  { id: "rad", de: "Radfahren", en: "Cycling" },
-                  { id: "kraft", de: "Krafttraining", en: "Strength" },
-                  { id: "spazier", de: "Spaziergang", en: "Walk" },
-                  { id: "keine", de: "Keine", en: "None" },
-                ].map((a) => (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {ACTIVITIES.map((a) => (
                   <button
                     key={a.id}
                     onClick={() => setActivity(a.id)}
                     style={{
-                      padding: "7px 12px",
+                      padding: "6px 11px",
                       borderRadius: 999,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 600,
                       border: "1px solid " + (a.id === activity ? "var(--ink)" : "var(--line)"),
                       background: a.id === activity ? "var(--ink)" : "var(--card)",
@@ -356,74 +365,246 @@ export function Entry({ data, lang, onRoute }: ScreenProps) {
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div
-            className="card card-pad"
-            style={{ background: "linear-gradient(180deg, color-mix(in oklch, var(--sage) 14%, var(--card)), var(--card))" }}
-          >
-            <div className="stat-label">
-              SCORAD live · {lang === "de" ? "aus aktueller Eingabe" : "from current input"}
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
-              <div className="stat-num">{today.scorad.toFixed(1)}</div>
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{t("score_skala")}</span>
-              <span style={{ marginLeft: "auto" }} className="pill sage">
-                ↓ {Math.abs(data.days[28].scorad - today.scorad).toFixed(1)}{" "}
-                {lang === "de" ? "vs. gestern" : "vs. yesterday"}
-              </span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 14 }}>
-              {[
-                { l: lang === "de" ? "Fläche" : "Area", v: "20%" },
-                { l: lang === "de" ? "Intensität" : "Intensity", v: "5.4" },
-                { l: lang === "de" ? "Subjektiv" : "Subjective", v: today.itch.toFixed(1) },
-              ].map((s, i) => (
-                <div key={i} style={{ background: "var(--card)", borderRadius: 10, padding: "10px 12px" }}>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "var(--ink-3)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    {s.l}
-                  </div>
-                  <div className="num" style={{ fontSize: 18, fontWeight: 700 }}>
-                    {s.v}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      <div
+        style={{
+          marginTop: 18,
+          fontSize: 10,
+          color: "var(--ink-3)",
+          fontFamily: "var(--font-mono)",
+          textAlign: "center",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {lang === "de"
+          ? `Eintrag #${selectedIdx + 1} · auf Gerät gespeichert · DiGA-konform`
+          : `Entry #${selectedIdx + 1} · stored on-device · DiGA-compliant`}
+      </div>
+    </div>
+  );
+}
 
+interface SectionHeaderProps {
+  icon: React.ReactNode;
+  title: string;
+  sub?: string;
+  right?: React.ReactNode;
+}
+
+function SectionHeader({ icon, title, sub, right }: SectionHeaderProps) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        padding: "0 4px 10px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: "var(--bg-2)",
+            border: "1px solid var(--line)",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          {icon}
+        </div>
+        <div>
           <div
-            className="card card-pad"
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              fontSize: 12,
-              color: "var(--ink-2)",
-              lineHeight: 1.5,
+              fontSize: 13,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              color: "var(--ink)",
             }}
           >
-            <Icon.info size={20} color="var(--ink-3)" />
-            <span>
-              {lang === "de" ? (
-                <>
-                  Eintrag <span className="num">#{data.days.length}</span> · gespeichert auf deinem Gerät, optional
-                  verschlüsselt synchronisiert via DiGA-Schnittstelle.
-                </>
-              ) : (
-                <>
-                  Entry <span className="num">#{data.days.length}</span> · stored on-device, optionally encrypted-sync
-                  via DiGA interface.
-                </>
-              )}
+            {title}
+          </div>
+          {sub && (
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>{sub}</div>
+          )}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+interface MealCardProps {
+  meal: MealSlot;
+  lang: "de" | "en";
+  onTogglePhoto: () => void;
+  onRemoveFood: (foodId: string) => void;
+}
+
+function MealCard({ meal, lang, onTogglePhoto, onRemoveFood }: MealCardProps) {
+  const isEmpty = meal.foods.length === 0;
+  return (
+    <div className="card" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Photo / placeholder */}
+      <button
+        onClick={onTogglePhoto}
+        style={{
+          height: 110,
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          position: "relative",
+          background: meal.hasPhoto
+            ? "radial-gradient(circle at 35% 40%, oklch(0.84 0.10 50), oklch(0.66 0.13 38))"
+            : "repeating-linear-gradient(135deg, var(--bg-2) 0 8px, var(--card) 8px 16px)",
+        }}
+      >
+        {meal.hasPhoto ? (
+          <svg viewBox="0 0 200 100" width="60%" style={{ display: "block", margin: "20px auto" }}>
+            <ellipse cx={100} cy={55} rx={68} ry={22} fill="oklch(0.96 0.02 60)" />
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <path
+                key={i}
+                d={`M ${50 + i * 16} 50 Q ${58 + i * 16} ${44 + (i % 2) * 4} ${66 + i * 16} 50 T ${82 + i * 16} 50`}
+                stroke="oklch(0.85 0.12 55)"
+                strokeWidth={2.5}
+                fill="none"
+                strokeLinecap="round"
+              />
+            ))}
+            <circle cx={80} cy={50} r={4} fill="oklch(0.55 0.18 25)" />
+            <circle cx={120} cy={56} r={4} fill="oklch(0.55 0.18 25)" />
+          </svg>
+        ) : (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              color: "var(--ink-3)",
+            }}
+          >
+            <Icon.camera size={20} color="var(--ink-3)" />
+            <span style={{ fontSize: 11, fontWeight: 600 }}>
+              {lang === "de" ? "Foto hinzufügen" : "Add photo"}
             </span>
           </div>
+        )}
+        {meal.hasPhoto && (
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              display: "flex",
+              gap: 4,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontFamily: "var(--font-mono)",
+                background: "rgba(0,0,0,0.55)",
+                color: "#fff",
+                padding: "2px 7px",
+                borderRadius: 6,
+              }}
+            >
+              {lang === "de" ? "Foto" : "Photo"}
+            </span>
+          </div>
+        )}
+      </button>
+
+      {/* Body */}
+      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{meal.label[lang]}</div>
+            <div
+              className="num"
+              style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}
+            >
+              {meal.time}
+            </div>
+          </div>
+          {meal.hasPhoto && (
+            <span className="pill sage" style={{ height: 20, fontSize: 10 }}>
+              <Icon.sparkle size={10} /> {lang === "de" ? "KI erkannt" : "AI detected"}
+            </span>
+          )}
         </div>
+
+        {isEmpty ? (
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--ink-3)",
+              fontStyle: "italic",
+              padding: "8px 0",
+            }}
+          >
+            {lang === "de" ? "Noch nichts erfasst." : "Nothing logged yet."}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {meal.foods.map((f) => {
+              const flagged = f.tags.some((tg) => ["Histamin", "Gluten", "Milch", "Nüsse"].includes(tg));
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => onRemoveFood(f.id)}
+                  className={"pill " + (flagged ? "clay" : "neutral")}
+                  style={{
+                    height: 24,
+                    fontSize: 11,
+                    border: "none",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                  title={lang === "de" ? "Entfernen" : "Remove"}
+                >
+                  {f[lang]}
+                  {flagged && <span style={{ opacity: 0.7, fontSize: 10 }}>· {f.tags[0]}</span>}
+                  <Icon.close size={10} />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <button
+          style={{
+            marginTop: "auto",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            padding: "8px 12px",
+            borderRadius: 10,
+            border: "1px dashed var(--line)",
+            background: "var(--bg-2)",
+            color: "var(--ink-2)",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <Icon.plus size={12} />
+          {lang === "de" ? "Lebensmittel hinzufügen" : "Add food"}
+        </button>
       </div>
     </div>
   );
