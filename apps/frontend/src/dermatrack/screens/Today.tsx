@@ -15,8 +15,8 @@ export function Today({ data, lang, onRoute }: ScreenProps) {
         title={lang === "de" ? "Hallo Lena." : "Hi Lena."}
         sub={
           lang === "de"
-            ? "Frag deinen Derma Agent — er hat deine 30 Tage Logs, Foto-KI und die Pollenvorhersage zusammengezogen."
-            : "Ask your Derma Agent — it has joined your 30 days of logs, photo AI and the pollen forecast."
+            ? "Frag deinen Derma Agent — er hat deine 30 Tage Logs, Foto-KI und die Pollenvorhersage zusammengezogen, und kann auf jeder Seite mit ⌘K aufgerufen werden."
+            : "Ask your Derma Agent — it has joined your 30 days of logs, photo AI and the pollen forecast, and is summonable with ⌘K from any page."
         }
         action={
           <Btn
@@ -30,7 +30,7 @@ export function Today({ data, lang, onRoute }: ScreenProps) {
         }
       />
 
-      <AgentChat data={data} lang={lang} onRoute={onRoute} />
+      <AgentChat />
     </div>
   );
 }
