@@ -21,6 +21,7 @@
     "start:environment": "node dist/services/environment-service/index.js",
     "start:insights": "node dist/services/insights-service/index.js",
     "start:treatment": "node dist/services/treatment-service/index.js",
+    "lan-ip": "node -e \"const os=require('os'); const ips=Object.values(os.networkInterfaces()).flat().filter(Boolean).filter((item)=>item.family==='IPv4'&&!item.internal).map((item)=>item.address); console.log(ips.join('\\n'))\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

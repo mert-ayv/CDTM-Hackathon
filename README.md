@@ -51,6 +51,14 @@ npm run dev:backend:photos
 npm run dev:backend:environment
 npm run dev:backend:insights
 npm run dev:backend:treatment
+npm run backend:lan-ip
 ```
 
 Backend service documentation: `apps/backend/README.md`
+
+For Expo Go on a physical phone, call the backend through your Mac's LAN IP:
+
+```bash
+npm run backend:lan-ip
+EXPO_PUBLIC_API_BASE_URL=http://<YOUR_LAN_IP>:3000
+```

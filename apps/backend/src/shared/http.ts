@@ -12,13 +12,36 @@ export type ServiceStatus = "ok" | "degraded";
 export type ServiceConfig = {
   name: string;
   port: number;
+  host?: string;
   registerRoutes: (app: Express) => void;
 };
 
-export function createService({ name, port, registerRoutes }: ServiceConfig) {
+function getAllowedOrigins() {
+  const rawOrigins = process.env.CORS_ORIGINS;
+
+  if (!rawOrigins) {
+    return true;
+  }
+
+  return rawOrigins
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+export function createService({
+  name,
+  port,
+  host = process.env.BACKEND_HOST ?? "0.0.0.0",
+  registerRoutes,
+}: ServiceConfig) {
   const app = express();
 
-  app.use(cors());
+  app.use(
+    cors({
+      origin: getAllowedOrigins(),
+    }),
+  );
   app.use(express.json({ limit: "10mb" }));
 
   app.get("/health", (_request, response) => {
@@ -52,14 +75,20 @@ export function createService({ name, port, registerRoutes }: ServiceConfig) {
     },
   );
 
-  return app.listen(port, () => {
-    console.log(`${name} listening on http://localhost:${port}`);
+  return app.listen(port, host, () => {
+    console.log(
+      `${name} listening on http://${host}:${port} (local: http://localhost:${port})`,
+    );
   });
 }
 
 export function getNumberEnv(name: string, fallback: number) {
   const value = process.env[name];
   return value ? Number(value) : fallback;
+}
+
+export function getStringEnv(name: string, fallback: string) {
+  return process.env[name] ?? fallback;
 }
 
 export function createId(prefix: string) {

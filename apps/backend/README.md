@@ -24,6 +24,34 @@ Run all backend services:
 npm run dev -w apps/backend
 ```
 
+For Expo Go on a physical phone, the backend must be reachable over your local
+network. The services bind to `0.0.0.0` by default, so use your Mac's LAN IP in
+the mobile app instead of `localhost`.
+
+Find the LAN IP:
+
+```bash
+npm run backend:lan-ip
+```
+
+Then configure the Expo app with:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://<YOUR_LAN_IP>:3000
+```
+
+Example:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://192.168.178.42:3000
+```
+
+The backend can expose the same value through `.env`:
+
+```bash
+PUBLIC_API_BASE_URL=http://192.168.178.42:3000
+```
+
 Run one service in a separate terminal:
 
 ```bash
@@ -40,6 +68,18 @@ Health check through the gateway:
 
 ```bash
 curl http://localhost:3000/api/health
+```
+
+Health check from the phone browser:
+
+```text
+http://<YOUR_LAN_IP>:3000/api/health
+```
+
+Expo config endpoint:
+
+```text
+http://<YOUR_LAN_IP>:3000/api/mobile/config
 ```
 
 ## Gateway Routes

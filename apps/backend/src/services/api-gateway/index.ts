@@ -1,4 +1,9 @@
-import { createService, getNumberEnv } from "../../shared/http.js";
+import type { Request } from "express";
+import {
+  createService,
+  getNumberEnv,
+  getStringEnv,
+} from "../../shared/http.js";
 
 type ServiceTarget = {
   key: string;
@@ -46,6 +51,24 @@ const targets: ServiceTarget[] = [
   },
 ];
 
+const gatewayPort = getNumberEnv("API_GATEWAY_PORT", 3000);
+
+function removeTrailingSlash(value: string) {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function getApiBaseUrl(request: Request) {
+  const explicitBaseUrl = process.env.PUBLIC_API_BASE_URL;
+
+  if (explicitBaseUrl) {
+    return removeTrailingSlash(explicitBaseUrl);
+  }
+
+  const protocol = getStringEnv("PUBLIC_API_PROTOCOL", request.protocol);
+  const host = request.get("host") ?? `localhost:${gatewayPort}`;
+  return `${protocol}://${host}`;
+}
+
 async function fetchHealth(target: ServiceTarget) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1500);
@@ -74,7 +97,7 @@ async function fetchHealth(target: ServiceTarget) {
 
 createService({
   name: "API Gateway",
-  port: getNumberEnv("API_GATEWAY_PORT", 3000),
+  port: gatewayPort,
   registerRoutes(app) {
     app.get("/api/health", async (_request, response) => {
       const services = await Promise.all(targets.map(fetchHealth));
@@ -87,6 +110,34 @@ createService({
 
     app.get("/api/services", (_request, response) => {
       response.json({ services: targets });
+    });
+
+    app.get("/api/mobile/config", (request, response) => {
+      const apiBaseUrl = getApiBaseUrl(request);
+
+      response.json({
+        app: "neurodermitis-tracker",
+        platform: "expo-go",
+        apiBaseUrl,
+        endpoints: {
+          health: `${apiBaseUrl}/api/health`,
+          diary: `${apiBaseUrl}/api/diary`,
+          skin: `${apiBaseUrl}/api/skin`,
+          photos: `${apiBaseUrl}/api/photos`,
+          environment: `${apiBaseUrl}/api/environment`,
+          insights: `${apiBaseUrl}/api/insights`,
+          treatment: `${apiBaseUrl}/api/treatment`,
+        },
+        features: {
+          foodLogging: true,
+          bodyMap: true,
+          photoUploads: "metadata-only",
+          weatherAndPollen: "placeholder",
+          triggerDetection: "placeholder",
+          flarePrediction: "placeholder",
+          treatmentTracking: true,
+        },
+      });
     });
 
     for (const target of targets) {
