@@ -176,14 +176,37 @@ export type EnvironmentSnapshot = {
     temperatureCelsius?: number;
     humidityPercent?: number;
     uvIndex?: number;
+    apparentTemperatureCelsius?: number;
+    precipitationMm?: number;
+    windSpeedKmh?: number;
+    pressureHpa?: number;
   };
   pollen?: {
+    alder?: number;
     grass?: number;
     birch?: number;
+    mugwort?: number;
+    olive?: number;
     ragweed?: number;
+    dust?: number;
     overallRisk?: "low" | "medium" | "high" | "unknown";
   };
+  airQuality?: {
+    europeanAqi?: number;
+  };
   source: "manual" | "provider" | "placeholder";
+};
+
+export type EnvironmentTimelinePoint = EnvironmentSnapshot & {
+  lagHours: number;
+};
+
+export type EnvironmentTimelineResponse = {
+  observedAt: ISODateString;
+  lookbackHours: number;
+  timeline: EnvironmentTimelinePoint[];
+  integrations: string[];
+  warning?: string;
 };
 
 export type ContextEvent = {

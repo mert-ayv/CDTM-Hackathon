@@ -326,7 +326,7 @@ export function MealLoggedArtifact({ mealLabel, foods, flagged = [], lang, onRou
       </div>
       {onRoute && (
         <button
-          onClick={() => onRoute("entry")}
+          onClick={() => onRoute("log")}
           style={{
             marginTop: 10,
             fontSize: 11,
@@ -341,7 +341,7 @@ export function MealLoggedArtifact({ mealLabel, foods, flagged = [], lang, onRou
             gap: 4,
           }}
         >
-          {lang === "de" ? "Im Tageseintrag öffnen" : "Open in daily entry"}
+          {lang === "de" ? "Im Flare Log öffnen" : "Open in flare log"}
           <Icon.arrowRight size={11} color="var(--sage-d)" />
         </button>
       )}
@@ -447,7 +447,7 @@ export function FlareLoggedArtifact({
       </div>
       {onRoute && (
         <button
-          onClick={() => onRoute("skin")}
+          onClick={() => onRoute("log")}
           style={{
             border: "none",
             background: "transparent",

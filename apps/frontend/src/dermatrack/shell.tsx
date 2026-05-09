@@ -5,8 +5,7 @@ import { Icon, type IconName } from "./icons";
 
 export type Route =
   | "today"
-  | "entry"
-  | "skin"
+  | "log"
   | "triggers"
   | "forecast"
   | "treatment"
@@ -23,9 +22,8 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { id: "today", icon: "home", de: "Heute", en: "Today", tag: "·" },
-  { id: "entry", icon: "plus", de: "Tageseintrag", en: "Daily entry", tag: "NEU" },
-  { id: "skin", icon: "body", de: "Haut-Tracking", en: "Skin tracking", tag: "14" },
-  { id: "triggers", icon: "sparkle", de: "Trigger", en: "Triggers", tag: "8" },
+  { id: "log", icon: "plus", de: "Flare Log", en: "Flare log", tag: "NEU" },
+  { id: "triggers", icon: "sparkle", de: "Analyse", en: "Analysis", tag: "24h" },
   { id: "forecast", icon: "cloud", de: "Vorhersage", en: "Forecast", tag: "7d" },
   { id: "treatment", icon: "pill", de: "Behandlung", en: "Treatment", tag: "5" },
   { id: "letter", icon: "file", de: "Arztbrief", en: "Doctor letter", tag: "PDF" },
@@ -71,9 +69,9 @@ function NavButton({ item, active, onClick, lang }: { item: NavItem; active: boo
 
 export function Sidebar({ route, onRoute, lang }: SidebarProps) {
   const groups: Array<{ label: string; items: NavItem[] }> = [
-    { label: lang === "de" ? "Tracking" : "Tracking", items: NAV.slice(0, 3) },
-    { label: lang === "de" ? "Analyse" : "Insights", items: NAV.slice(3, 6) },
-    { label: lang === "de" ? "Praxis" : "Clinic", items: NAV.slice(6) },
+    { label: lang === "de" ? "Tracking" : "Tracking", items: NAV.slice(0, 1) },
+    { label: lang === "de" ? "Analyse" : "Insights", items: NAV.slice(2, 5) },
+    { label: lang === "de" ? "Praxis" : "Clinic", items: NAV.slice(5) },
   ];
   return (
     <aside className="sidebar">
@@ -84,6 +82,48 @@ export function Sidebar({ route, onRoute, lang }: SidebarProps) {
           <div className="brand-sub">v0.4.2 · DiGA</div>
         </div>
       </div>
+      <button
+        onClick={() => onRoute("log")}
+        style={{
+          width: "100%",
+          minHeight: 76,
+          borderRadius: 16,
+          border: route === "log" ? "1px solid var(--sage-d)" : "1px solid color-mix(in oklch, var(--sage-d) 34%, var(--line))",
+          background:
+            route === "log"
+              ? "linear-gradient(180deg, var(--sage-d), color-mix(in oklch, var(--sage-d) 86%, var(--ink)))"
+              : "linear-gradient(180deg, color-mix(in oklch, var(--sage) 32%, var(--card)), var(--card))",
+          color: route === "log" ? "#fff" : "var(--ink)",
+          boxShadow: "0 14px 34px rgba(65, 89, 72, 0.18)",
+          padding: 14,
+          margin: "4px 0 16px",
+          display: "grid",
+          gridTemplateColumns: "36px 1fr",
+          gap: 10,
+          alignItems: "center",
+          textAlign: "left",
+        }}
+      >
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            display: "grid",
+            placeItems: "center",
+            background: route === "log" ? "rgba(255,255,255,0.18)" : "var(--sage-d)",
+            color: "#fff",
+          }}
+        >
+          <Icon.plus size={18} />
+        </span>
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 14, fontWeight: 900 }}>{lang === "de" ? "Log starten" : "Start log"}</span>
+          <span style={{ display: "block", marginTop: 2, fontSize: 11, opacity: 0.72, lineHeight: 1.3 }}>
+            {lang === "de" ? "Ausschlag jetzt erfassen" : "Capture a flare now"}
+          </span>
+        </span>
+      </button>
       {groups.map((g, gi) => (
         <div key={gi}>
           <div className="nav-section-label">{g.label}</div>

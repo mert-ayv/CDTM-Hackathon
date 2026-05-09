@@ -6,8 +6,7 @@ import { AgentTrigger } from "./components/AgentTrigger";
 import { DT_DATA, type Lang } from "./data";
 import { Sidebar, Topbar, useHashRoute, type Route } from "./shell";
 import { Today } from "./screens/Today";
-import { Entry } from "./screens/Entry";
-import { Skin } from "./screens/Skin";
+import { FlareLog } from "./screens/FlareLog";
 import { Triggers } from "./screens/Triggers";
 import { Forecast } from "./screens/Forecast";
 import { Treatment } from "./screens/Treatment";
@@ -17,8 +16,7 @@ import type { ScreenProps } from "./screens/types";
 
 const SCREENS: Record<Route, ComponentType<ScreenProps>> = {
   today: Today,
-  entry: Entry,
-  skin: Skin,
+  log: FlareLog,
   triggers: Triggers,
   forecast: Forecast,
   treatment: Treatment,

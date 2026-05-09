@@ -23,7 +23,7 @@ export function Today({ data, lang, onRoute }: ScreenProps) {
             kind="ghost"
             size="md"
             icon={<Icon.plus size={14} />}
-            onClick={() => onRoute("entry")}
+            onClick={() => onRoute("log")}
           >
             {t("jetzt_loggen")}
           </Btn>
