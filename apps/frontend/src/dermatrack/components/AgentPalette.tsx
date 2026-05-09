@@ -62,6 +62,13 @@ export function AgentPalette() {
       label: lang === "de" ? "Arztbrief" : "Doctor letter",
       query: lang === "de" ? "Arztbrief vorbereiten" : "Draft doctor letter",
     },
+    {
+      label: lang === "de" ? "Wer hat Zugriff?" : "Who has access?",
+      query:
+        lang === "de"
+          ? "Wer hat Zugriff auf meine Daten?"
+          : "Who has access to my data?",
+    },
   ];
 
   return (

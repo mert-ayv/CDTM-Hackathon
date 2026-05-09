@@ -2,7 +2,15 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Lang } from "./data";
 import { Icon, type IconName } from "./icons";
 
-export type Route = "today" | "entry" | "skin" | "triggers" | "forecast" | "treatment" | "letter";
+export type Route =
+  | "today"
+  | "entry"
+  | "skin"
+  | "triggers"
+  | "forecast"
+  | "treatment"
+  | "letter"
+  | "connections";
 
 export interface NavItem {
   id: Route;
@@ -20,6 +28,7 @@ export const NAV: NavItem[] = [
   { id: "forecast", icon: "cloud", de: "Vorhersage", en: "Forecast", tag: "7d" },
   { id: "treatment", icon: "pill", de: "Behandlung", en: "Treatment", tag: "5" },
   { id: "letter", icon: "file", de: "Arztbrief", en: "Doctor letter", tag: "PDF" },
+  { id: "connections", icon: "share", de: "Datenfreigabe", en: "Connections", tag: "ePA" },
 ];
 
 const ROUTES = NAV.map((n) => n.id);

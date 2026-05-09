@@ -412,6 +412,122 @@ Want me to log it as lunch at 12:30?`,
     };
   }
 
+  // Connections / data access / "who has access"
+  if (
+    q.includes("zugriff") ||
+    q.includes("access") ||
+    q.includes("freigabe") ||
+    q.includes("permission") ||
+    q.includes("praxis sehen") ||
+    q.includes("epa") ||
+    q.includes("teilen") && (q.includes("daten") || q.includes("data")) ||
+    q.includes("wer sieht") ||
+    q.includes("who sees") ||
+    q.includes("share data")
+  ) {
+    return {
+      id: newId(),
+      role: "agent",
+      ts,
+      text:
+        lang === "de"
+          ? `Aktuell sind drei Verbindungen aktiv: Dr. Lehmann (TI-Messenger · 4 Kategorien), ePA (gematik · 5 Kategorien), Apple Health (Lesezugriff · 1 Kategorie). Voll-Audit der letzten 14 Tage liegt vor — keine ungewöhnlichen Zugriffe.`
+          : `Three active connections right now: Dr. Lehmann (TI-Messenger · 4 categories), ePA (gematik · 5 categories), Apple Health (read-only · 1 category). Full audit for the last 14 days is on file — no unusual access.`,
+      widget: (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: 14,
+            border: "1px solid var(--line)",
+            borderRadius: 14,
+            background: "var(--card)",
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >
+          {[
+            {
+              name: "Dr. Lehmann",
+              detail: lang === "de" ? "Praxis Mitte · TI-Messenger" : "Praxis Mitte · TI-Messenger",
+              brand: "linear-gradient(135deg, var(--sage-d), oklch(0.62 0.07 155))",
+              shared: 4,
+            },
+            {
+              name: "ePA",
+              detail: lang === "de" ? "Patientenakte · gematik" : "Patient record · gematik",
+              brand: "linear-gradient(135deg, oklch(0.55 0.12 250), oklch(0.42 0.14 260))",
+              shared: 5,
+            },
+            {
+              name: "Apple Health",
+              detail: lang === "de" ? "Lesezugriff · iPhone" : "Read-only · iPhone",
+              brand: "linear-gradient(135deg, oklch(0.66 0.18 25), oklch(0.74 0.15 35))",
+              shared: 1,
+            },
+          ].map((c) => (
+            <div
+              key={c.name}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 0",
+                borderBottom: "1px solid var(--line-2)",
+              }}
+            >
+              <span
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 8,
+                  background: c.brand,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Icon.share size={12} color="#fff" />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{c.name}</div>
+                <div style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+                  {c.detail}
+                </div>
+              </div>
+              <span className="num" style={{ fontSize: 11, fontWeight: 700, color: "var(--sage-d)" }}>
+                {c.shared}{" "}
+                <span style={{ fontSize: 9, color: "var(--ink-3)" }}>
+                  {lang === "de" ? "geteilt" : "shared"}
+                </span>
+              </span>
+            </div>
+          ))}
+          <button
+            onClick={() => onRoute("connections")}
+            style={{
+              alignSelf: "flex-start",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "var(--sage-d)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+            }}
+          >
+            {lang === "de" ? "Datenfreigabe verwalten" : "Manage connections"}
+            <Icon.arrowRight size={11} color="var(--sage-d)" />
+          </button>
+        </div>
+      ),
+    };
+  }
+
   // Doctor letter → inline LetterPreviewArtifact
   if (
     q.includes("arztbrief") ||

@@ -11,6 +11,7 @@ import { Triggers } from "./screens/Triggers";
 import { Forecast } from "./screens/Forecast";
 import { Treatment } from "./screens/Treatment";
 import { Letter } from "./screens/Letter";
+import { Connections } from "./screens/Connections";
 import type { ScreenProps } from "./screens/types";
 
 const SCREENS: Record<Route, ComponentType<ScreenProps>> = {
@@ -21,6 +22,7 @@ const SCREENS: Record<Route, ComponentType<ScreenProps>> = {
   forecast: Forecast,
   treatment: Treatment,
   letter: Letter,
+  connections: Connections,
 };
 
 export function DermaTrackApp() {
