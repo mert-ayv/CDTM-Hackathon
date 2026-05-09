@@ -9,6 +9,13 @@
     "dev": "concurrently -n frontend,backend -c cyan,green \"npm run dev -w apps/frontend\" \"npm run dev -w apps/backend\"",
     "dev:frontend": "npm run dev -w apps/frontend",
     "dev:backend": "npm run dev -w apps/backend",
+    "dev:backend:gateway": "npm run dev:gateway -w apps/backend",
+    "dev:backend:diary": "npm run dev:diary -w apps/backend",
+    "dev:backend:skin": "npm run dev:skin -w apps/backend",
+    "dev:backend:photos": "npm run dev:photos -w apps/backend",
+    "dev:backend:environment": "npm run dev:environment -w apps/backend",
+    "dev:backend:insights": "npm run dev:insights -w apps/backend",
+    "dev:backend:treatment": "npm run dev:treatment -w apps/backend",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
