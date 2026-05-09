@@ -146,9 +146,10 @@ createService({
           stressTracking: true,
           sportSweatTracking: true,
           activeRashScales: true,
-          bodyMap: true,
-          photoUploads: "data-uri-upload-local-storage-ai-analysis",
-          weatherAndPollen: "placeholder",
+          bodyMap: "skin-service",
+          skinEntries: "body-map-region-history-photo-references",
+          photoUploads: "photo-service-data-uri-upload-local-storage-ai-analysis",
+          weatherAndPollen: "open-meteo-provider-and-supabase-snapshots",
           triggerDetection: "placeholder",
           flarePrediction: "placeholder",
           treatmentTracking: true,
@@ -177,7 +178,8 @@ createService({
             response.setHeader("content-type", contentType);
           }
 
-          response.status(serviceResponse.status).send(await serviceResponse.text());
+          const body = Buffer.from(await serviceResponse.arrayBuffer());
+          response.status(serviceResponse.status).send(body);
         } catch {
           response.status(502).json({
             error: "service_unavailable",

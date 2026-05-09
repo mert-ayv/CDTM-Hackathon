@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Neurodermitis Tracker",
+    "slug": "neurodermitis-tracker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "neurotracker",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take rash photos for your personal symptom diary.",
+        "NSPhotoLibraryUsageDescription": "Choose rash photos for your personal symptom diary.",
+        "NSLocationWhenInUseUsageDescription": "Capture local weather and pollen context for symptom tracking."
+      }
+    },
+    "android": {
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      "expo-image-picker",
+      "expo-location"
+    ]
+  }
+}

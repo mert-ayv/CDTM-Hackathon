@@ -174,16 +174,41 @@ export type EnvironmentSnapshot = {
   };
   weather?: {
     temperatureCelsius?: number;
+    apparentTemperatureCelsius?: number;
     humidityPercent?: number;
+    precipitationMm?: number;
+    rainMm?: number;
+    weatherCode?: number;
+    pressureMslHpa?: number;
+    windSpeedKmh?: number;
+    windGustsKmh?: number;
     uvIndex?: number;
   };
   pollen?: {
+    alder?: number;
     grass?: number;
     birch?: number;
+    mugwort?: number;
+    olive?: number;
     ragweed?: number;
+    pm10?: number;
+    pm25?: number;
+    europeanAqi?: number;
     overallRisk?: "low" | "medium" | "high" | "unknown";
   };
+  symptomContext?: {
+    diaryEntryId?: string;
+    symptomObserved: boolean;
+    activeRashes?: ActiveRashLog[];
+    itchiness?: number;
+    dryness?: number;
+    notes?: string;
+  };
+  provider?: "open-meteo" | "manual";
+  sourceUrl?: string;
+  notes?: string;
   source: "manual" | "provider" | "placeholder";
+  createdAt?: ISODateString;
 };
 
 export type ContextEvent = {
@@ -223,10 +248,37 @@ export type Medication = {
   id: string;
   userId: string;
   name: string;
+  type?:
+    | "emollient"
+    | "topical_steroid"
+    | "topical_calcineurin_inhibitor"
+    | "antihistamine"
+    | "antibiotic"
+    | "biologic"
+    | "supplement"
+    | "other";
+  form?:
+    | "cream"
+    | "ointment"
+    | "lotion"
+    | "gel"
+    | "tablet"
+    | "capsule"
+    | "drops"
+    | "injection"
+    | "other";
+  activeIngredient?: string;
+  strength?: string;
   dosage?: string;
   schedule?: string;
+  instructions?: string;
   prescribedBy?: string;
+  startDate?: ISODateString;
+  endDate?: ISODateString;
+  active?: boolean;
+  notes?: string;
   createdAt: ISODateString;
+  updatedAt?: ISODateString;
 };
 
 export type TreatmentApplication = {
@@ -235,7 +287,18 @@ export type TreatmentApplication = {
   medicationId?: string;
   appliedAt: ISODateString;
   bodyRegionId?: string;
+  side?: BodySide;
   amount?: string;
+  reason?: "routine" | "flare" | "itch" | "dryness" | "prevention" | "other";
+  itchinessBefore?: Scale0To10;
+  itchinessAfter?: Scale0To10;
+  drynessBefore?: Scale0To10;
+  drynessAfter?: Scale0To10;
+  rednessBefore?: Scale0To10;
+  rednessAfter?: Scale0To10;
+  effectiveness?: Scale0To10;
+  sideEffects?: string[];
   notes?: string;
   createdAt: ISODateString;
+  updatedAt?: ISODateString;
 };

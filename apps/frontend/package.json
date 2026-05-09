@@ -2,22 +2,25 @@
   "name": "@cdtm-hackathon/frontend",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "main": "expo/AppEntry.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "dev": "expo start --lan",
+    "start": "expo start --lan",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "expo": "~55.0.0",
+    "expo-image-picker": "~55.0.20",
+    "expo-location": "~55.1.9",
+    "react": "19.2.0",
+    "react-native": "0.83.6"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
     "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "typescript": "^5.7.2"
   }
 }

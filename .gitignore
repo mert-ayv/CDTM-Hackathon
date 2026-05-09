@@ -2,6 +2,10 @@ node_modules/
 data/
 dist/
 build/
+.expo/
+apps/frontend/.expo/
+apps/backend/photos.json
+apps/backend/uploads/
 .env
 .env.local
 .DS_Store

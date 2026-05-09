@@ -42,6 +42,10 @@ function toIsoString(value: string | Date) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function toJsonb(value: unknown) {
+  return value === undefined ? null : JSON.stringify(value);
+}
+
 function rowToFoodImage(row: FoodImageRow): FoodImageAttachment {
   return {
     id: row.id,
@@ -153,12 +157,12 @@ export async function upsertDiaryEntry(entry: DiaryEntry) {
       entry.id,
       entry.userId,
       entry.occurredAt,
-      entry.food ?? null,
-      entry.sport ?? null,
-      entry.stress ?? null,
+      toJsonb(entry.food),
+      toJsonb(entry.sport),
+      toJsonb(entry.stress),
       entry.stressLevel ?? null,
-      entry.sleep ?? null,
-      entry.activeRashes ?? null,
+      toJsonb(entry.sleep),
+      toJsonb(entry.activeRashes),
       entry.habits ?? null,
       entry.lifeChanges ?? null,
       entry.notes ?? null,
@@ -214,7 +218,7 @@ export async function upsertFoodImage(image: FoodImageAttachment) {
       image.originalFilename ?? null,
       image.mimeType ?? null,
       image.linkedBarcode ?? null,
-      image.openFoodFactsProduct ?? null,
+      toJsonb(image.openFoodFactsProduct),
       image.analysisStatus,
       image.analysisError ?? null,
       image.notes ?? null,

@@ -42,6 +42,10 @@ function toIsoString(value: string | Date) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function toJsonb(value: unknown) {
+  return value === undefined ? null : JSON.stringify(value);
+}
+
 function rowToPhoto(row: RashPhotoRow): PersistedRashPhoto {
   return {
     id: row.id,
@@ -162,7 +166,7 @@ export async function upsertRashPhoto(photo: PersistedRashPhoto) {
       photo.aiConfidence ?? null,
       photo.aiSummary ?? null,
       photo.aiFindings ?? null,
-      photo.aiAnalysis ?? null,
+      toJsonb(photo.aiAnalysis),
       photo.aiAnalysisError ?? null,
       photo.analyzedAt ?? null,
       photo.createdAt,

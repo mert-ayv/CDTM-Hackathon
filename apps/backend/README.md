@@ -227,11 +227,201 @@ OPENFOODFACTS_BASE_URL=https://world.openfoodfacts.org
 OPENFOODFACTS_USER_AGENT=neurodermitis-tracker/0.1 (prototype)
 ```
 
+## Environment Service
+
+The Environment Service captures weather, pollen and air-quality context for a
+location and can persist that snapshot together with the user's current rash
+state. This is the main data model for later trigger analysis like "flare after
+high grass pollen" or "dryness when humidity is low".
+
+Provider-backed snapshots use Open-Meteo:
+
+- Weather Forecast API for temperature, humidity, pressure, rain, wind and UV.
+- Air Quality API for alder, birch, grass, mugwort, olive and ragweed pollen,
+  PM10, PM2.5 and European AQI.
+
+### Routes
+
+```text
+GET  /metadata
+GET  /snapshot?latitude=&longitude=&userId=&persist=false
+GET  /snapshots?userId=&from=&to=&symptomObserved=true&limit=100
+POST /snapshots
+POST /snapshots/capture
+GET  /summary?userId=&days=14
+GET  /context-events?userId=
+POST /context-events
+```
+
+### Capture Weather, Pollen And Flare Context
+
+Use this when the app user reports an active rash and you want to store the
+environmental context at that moment:
+
+```bash
+curl -X POST http://localhost:3004/snapshots/capture \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "demo-user",
+    "latitude": 48.1351,
+    "longitude": 11.5820,
+    "symptomObserved": true,
+    "activeRashes": [
+      {
+        "bodyRegionId": "arm_left",
+        "side": "front",
+        "itchiness": 7,
+        "dryness": 6,
+        "active": true
+      }
+    ],
+    "notes": "Ausschlag nach Spaziergang beobachtet"
+  }'
+```
+
+Through the gateway:
+
+```text
+POST http://localhost:3000/api/environment/snapshots/capture
+```
+
+For Expo Go, replace `localhost` with the Mac LAN IP and keep port `3000`.
+
+### Read Saved Flare-Environment Snapshots
+
+```bash
+curl "http://localhost:3004/snapshots?userId=demo-user&symptomObserved=true"
+curl "http://localhost:3004/summary?userId=demo-user&days=14"
+```
+
+Configure provider defaults with:
+
+```text
+OPEN_METEO_WEATHER_BASE_URL=https://api.open-meteo.com
+OPEN_METEO_AIR_QUALITY_BASE_URL=https://air-quality-api.open-meteo.com
+POLLEN_RISK_MEDIUM_THRESHOLD=10
+POLLEN_RISK_HIGH_THRESHOLD=50
+```
+
+## Treatment Service
+
+The Treatment Service tracks medication/care products and concrete applications
+on body regions. It is shaped for later treatment optimization, e.g. comparing
+itchiness before and after applying a cream.
+
+### Routes
+
+```text
+GET    /metadata
+GET    /medications?userId=&active=true&type=
+POST   /medications
+GET    /medications/:id
+PATCH  /medications/:id
+DELETE /medications/:id
+GET    /applications?userId=&medicationId=&bodyRegionId=&from=&to=
+POST   /applications
+GET    /applications/:id
+PATCH  /applications/:id
+DELETE /applications/:id
+GET    /summary?userId=&days=14
+```
+
+### Medication Example
+
+```bash
+curl -X POST http://localhost:3006/medications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "demo-user",
+    "name": "Basic Pflegecreme",
+    "type": "emollient",
+    "form": "cream",
+    "dosage": "thin layer",
+    "schedule": "morning and evening",
+    "instructions": "Apply after showering"
+  }'
+```
+
+### Treatment Application Example
+
+```bash
+curl -X POST http://localhost:3006/applications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "demo-user",
+    "medicationId": "med_...",
+    "appliedAt": "2026-05-09T20:00:00.000Z",
+    "bodyRegionId": "left_arm_front",
+    "amount": "pea-sized",
+    "reason": "flare",
+    "itchinessBefore": 8,
+    "itchinessAfter": 5,
+    "drynessBefore": 7,
+    "drynessAfter": 4,
+    "effectiveness": 7
+  }'
+```
+
+## Insights Service
+
+The Insights Service builds deterministic, explainable analytics from diary,
+skin, photo, environment and treatment data. It does not claim medical
+causation. It ranks possible personal patterns and creates 24-48h flare risk
+forecasts.
+
+### Routes
+
+```text
+GET  /metadata
+GET  /features?userId=&days=30
+POST /features/rebuild
+GET  /triggers?userId=&days=30&lagHours=48
+POST /trigger-candidates
+GET  /forecast?userId=&horizonHours=24&days=30
+POST /explain
+```
+
+### Forecast Example
+
+```bash
+curl "http://localhost:3005/forecast?userId=demo-user&horizonHours=48&days=30"
+```
+
+Through the gateway:
+
+```text
+GET http://localhost:3000/api/insights/forecast?userId=demo-user&horizonHours=48
+```
+
+### Trigger Analysis Example
+
+```bash
+curl "http://localhost:3005/triggers?userId=demo-user&days=30&lagHours=48"
+```
+
+### LLM Explanation
+
+The deterministic forecast and trigger candidates work without OpenAI. If
+`OPENAI_API_KEY` or `AI_PROVIDER_API_KEY` is set, `/explain` asks the configured
+model to produce a cautious German UI explanation.
+
+```bash
+curl -X POST http://localhost:3005/explain \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"demo-user","days":30,"horizonHours":48}'
+```
+
+Configure with:
+
+```text
+OPENAI_API_KEY=
+OPENAI_INSIGHTS_MODEL=gpt-4.1-mini
+```
+
 ## Next Backend Steps
 
-1. Replace in-memory stores with a database per service or a shared development database.
-2. Add authentication and user ownership checks.
-3. Add real image upload storage for Diary food images and the Photo Service.
-4. Add OpenFoodFacts write/photo upload flow if contributor auth is needed.
-5. Connect weather and pollen providers in the Environment Service.
-6. Implement trigger detection and 24-48h flare prediction in the Insights Service.
+1. Add authentication and user ownership checks.
+2. Add real image upload storage for Diary food images and the Photo Service.
+3. Add OpenFoodFacts write/photo upload flow if contributor auth is needed.
+4. Implement trigger detection and 24-48h flare prediction in the Insights Service.
+5. Replace prototype pollen risk thresholds with medically reviewed thresholds.

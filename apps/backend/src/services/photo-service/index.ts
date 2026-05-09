@@ -6,7 +6,6 @@ import {
   loadRashPhotos,
   upsertRashPhoto,
 } from "../../repositories/rashPhotoRepository.js";
-import { bodyRegions } from "../../shared/bodyMap.js";
 import { createId, createService, getNumberEnv } from "../../shared/http.js";
 import type { BodySide, RashPhoto } from "../../shared/types.js";
 
@@ -165,16 +164,6 @@ function normalizeSide(value: unknown): BodySide | undefined {
   return value === "front" || value === "back" ? value : undefined;
 }
 
-function findBodyRegion(bodyRegionId: string | undefined) {
-  return bodyRegionId
-    ? bodyRegions.find((region) => region.id === bodyRegionId)
-    : undefined;
-}
-
-function getBodyRegionSide(bodyRegionId: string | undefined, fallback?: BodySide) {
-  return findBodyRegion(bodyRegionId)?.side ?? fallback;
-}
-
 function isValidAnalysisStatus(
   value: unknown,
 ): value is RashPhotoRecord["aiAnalysisStatus"] {
@@ -242,7 +231,7 @@ function normalizePersistedPhoto(value: unknown): RashPhotoRecord | undefined {
 
   const userId = asString(raw.userId) ?? "demo-user";
   const bodyRegionId = asString(raw.bodyRegionId);
-  const side = normalizeSide(raw.side) ?? getBodyRegionSide(bodyRegionId);
+  const side = normalizeSide(raw.side);
   const storageType = asString(raw.storageType);
 
   return {
@@ -342,7 +331,7 @@ function serializePhoto(photo: RashPhotoRecord, options: PhotoListOptions) {
 
   return {
     ...safePhoto,
-    imageUrl: photo.localFileName ? `/photos/${photo.id}/image` : photo.storageUrl,
+    imageUrl: photo.localFileName ? `/api/photos/${photo.id}/image` : photo.storageUrl,
     imageDataUri: options.includeImageData ? readPhotoDataUri(photo) : undefined,
   };
 }
@@ -362,19 +351,9 @@ function readPhotoDataUri(photo: RashPhotoRecord) {
 
 function filterPhotos(query: UnknownRecord) {
   const userId = asString(query.userId);
-  const bodyRegionId = asString(query.bodyRegionId);
-  const side = normalizeSide(query.side);
 
   return photos.filter((photo) => {
     if (userId && photo.userId !== userId) {
-      return false;
-    }
-
-    if (bodyRegionId && photo.bodyRegionId !== bodyRegionId) {
-      return false;
-    }
-
-    if (side && photo.side !== side) {
       return false;
     }
 
@@ -382,77 +361,8 @@ function filterPhotos(query: UnknownRecord) {
   });
 }
 
-function getSeverityScore(photo: RashPhotoRecord) {
-  return (
-    photo.aiSeverityScore ??
-    photo.userSeverityScore ??
-    (photo.userIntensity ? photo.userIntensity * 2 : undefined)
-  );
-}
-
-function getSeverityColor(score: number | undefined): BodyMapColor {
-  if (score === undefined || score <= 0) {
-    return "clear";
-  }
-
-  if (score <= 3) {
-    return "mild";
-  }
-
-  if (score <= 6) {
-    return "moderate";
-  }
-
-  return "severe";
-}
-
-function getBodyMapColorHex(color: BodyMapColor) {
-  switch (color) {
-    case "mild":
-      return "#facc15";
-    case "moderate":
-      return "#fb923c";
-    case "severe":
-      return "#ef4444";
-    case "clear":
-    default:
-      return "#22c55e";
-  }
-}
-
 function sortNewestFirst(left: RashPhotoRecord, right: RashPhotoRecord) {
   return new Date(right.takenAt).getTime() - new Date(left.takenAt).getTime();
-}
-
-function buildBodyMap(query: UnknownRecord) {
-  const relevantPhotos = filterPhotos(query);
-
-  return bodyRegions.map((region) => {
-    const regionPhotos = relevantPhotos
-      .filter((photo) => photo.bodyRegionId === region.id)
-      .sort(sortNewestFirst);
-    const latestPhoto = regionPhotos[0];
-    const severityScores = regionPhotos
-      .map(getSeverityScore)
-      .filter((score): score is number => score !== undefined);
-    const latestSeverityScore = latestPhoto ? getSeverityScore(latestPhoto) : undefined;
-    const maxSeverityScore = severityScores.length
-      ? Math.max(...severityScores)
-      : undefined;
-    const color = getSeverityColor(latestSeverityScore);
-
-    return {
-      ...region,
-      active: regionPhotos.length > 0,
-      photoCount: regionPhotos.length,
-      latestPhotoId: latestPhoto?.id,
-      latestPhotoAt: latestPhoto?.takenAt,
-      latestSeverityScore,
-      maxSeverityScore,
-      color,
-      colorHex: getBodyMapColorHex(color),
-    };
-  });
 }
 
 function badRequest(response: Response, message: string) {
@@ -475,41 +385,8 @@ function updatePhotoFromBody(photo: RashPhotoRecord, body: UnknownRecord) {
     photo.takenAt = asIsoDate(body.takenAt, photo.takenAt);
   }
 
-  if ("bodyRegionId" in body) {
-    photo.bodyRegionId = asString(body.bodyRegionId);
-    photo.side = getBodyRegionSide(photo.bodyRegionId, photo.side);
-  }
-
-  if ("side" in body) {
-    photo.side = normalizeSide(body.side) ?? photo.side;
-  }
-
-  if ("userSeverityScore" in body || "severityScore" in body) {
-    photo.userSeverityScore = clampScale(body.userSeverityScore ?? body.severityScore, 0);
-  }
-
-  if ("userIntensity" in body || "intensity" in body) {
-    photo.userIntensity = asScale1To5(body.userIntensity ?? body.intensity);
-  }
-
-  if ("itchiness" in body) {
-    photo.itchiness = clampScale(body.itchiness, 0);
-  }
-
-  if ("dryness" in body) {
-    photo.dryness = clampScale(body.dryness, 0);
-  }
-
-  if ("redness" in body) {
-    photo.redness = clampScale(body.redness, 0);
-  }
-
-  if ("pain" in body) {
-    photo.pain = clampScale(body.pain, 0);
-  }
-
-  if ("swelling" in body) {
-    photo.swelling = clampScale(body.swelling, 0);
+  if ("originalFilename" in body) {
+    photo.originalFilename = asString(body.originalFilename);
   }
 
   if ("notes" in body) {
@@ -522,8 +399,6 @@ function updatePhotoFromBody(photo: RashPhotoRecord, body: UnknownRecord) {
 function createPhotoFromBody(value: unknown): RashPhotoRecord {
   const body = asRecord(value);
   const now = new Date().toISOString();
-  const bodyRegionId = asString(body.bodyRegionId);
-  const side = normalizeSide(body.side) ?? getBodyRegionSide(bodyRegionId);
   const id = createId("photo");
   const dataUri = asString(body.dataUri);
   const storageUrl = asString(body.storageUrl);
@@ -548,8 +423,6 @@ function createPhotoFromBody(value: unknown): RashPhotoRecord {
     id,
     userId: asString(body.userId) ?? "demo-user",
     takenAt: asIsoDate(body.takenAt, now),
-    bodyRegionId,
-    side,
     storageUrl,
     originalFilename: asString(body.originalFilename),
     aiAnalysisStatus: "pending",
@@ -558,28 +431,12 @@ function createPhotoFromBody(value: unknown): RashPhotoRecord {
     localFileName,
     mimeType,
     fileSizeBytes,
-    userSeverityScore:
-      body.userSeverityScore === undefined && body.severityScore === undefined
-        ? undefined
-        : clampScale(body.userSeverityScore ?? body.severityScore, 0),
-    userIntensity: asScale1To5(body.userIntensity ?? body.intensity),
-    itchiness: body.itchiness === undefined ? undefined : clampScale(body.itchiness, 0),
-    dryness: body.dryness === undefined ? undefined : clampScale(body.dryness, 0),
-    redness: body.redness === undefined ? undefined : clampScale(body.redness, 0),
-    pain: body.pain === undefined ? undefined : clampScale(body.pain, 0),
-    swelling: body.swelling === undefined ? undefined : clampScale(body.swelling, 0),
     notes: asString(body.notes),
     updatedAt: now,
   };
 }
 
 function validatePhotoInput(body: UnknownRecord) {
-  const bodyRegionId = asString(body.bodyRegionId);
-
-  if (bodyRegionId && !findBodyRegion(bodyRegionId)) {
-    return `Unknown bodyRegionId "${bodyRegionId}".`;
-  }
-
   if (!asString(body.dataUri) && !asString(body.storageUrl)) {
     return "Provide dataUri or storageUrl for the rash image.";
   }
@@ -596,18 +453,9 @@ function getOpenAiModel() {
 }
 
 function buildAnalysisPrompt(photo: RashPhotoRecord) {
-  const region = findBodyRegion(photo.bodyRegionId);
   const context = {
-    bodyRegionId: photo.bodyRegionId,
-    bodyRegionLabel: region?.label,
-    side: photo.side,
-    userSeverityScore: photo.userSeverityScore,
-    userIntensity: photo.userIntensity,
-    itchiness: photo.itchiness,
-    dryness: photo.dryness,
-    redness: photo.redness,
-    pain: photo.pain,
-    swelling: photo.swelling,
+    photoId: photo.id,
+    originalFilename: photo.originalFilename,
     notes: photo.notes,
   };
 
@@ -774,44 +622,9 @@ createService({
       response.json({
         supportedUploadFormats: ["dataUri", "storageUrl"],
         supportedImageMimeTypes: [...supportedImageMimeTypes],
-        scales: {
-          severity: { min: 0, max: 10 },
-          intensity: { min: 1, max: 5 },
-          itchiness: { min: 0, max: 10 },
-          dryness: { min: 0, max: 10 },
-          redness: { min: 0, max: 10 },
-        },
-        bodyRegions,
+        owns: ["image-upload", "image-storage", "image-serving", "ai-image-analysis"],
         openAiConfigured: Boolean(getOpenAiApiKey()),
         openAiModel: getOpenAiModel(),
-      });
-    });
-
-    app.get("/body-map", (request, response) => {
-      response.json({
-        regions: buildBodyMap(request.query as UnknownRecord),
-      });
-    });
-
-    app.get("/body-map/regions/:bodyRegionId/photos", (request, response) => {
-      const includeImageData = request.query.includeImageData === "true";
-      const region = findBodyRegion(request.params.bodyRegionId);
-
-      if (!region) {
-        response.status(404).json({ error: "body_region_not_found" });
-        return;
-      }
-
-      const regionPhotos = filterPhotos({
-        ...request.query,
-        bodyRegionId: request.params.bodyRegionId,
-      }).sort(sortNewestFirst);
-
-      response.json({
-        region,
-        photos: regionPhotos.map((photo) =>
-          serializePhoto(photo, { includeImageData }),
-        ),
       });
     });
 
@@ -898,12 +711,6 @@ createService({
       }
 
       const body = asRecord(request.body);
-      const bodyRegionId = asString(body.bodyRegionId);
-
-      if (bodyRegionId && !findBodyRegion(bodyRegionId)) {
-        badRequest(response, `Unknown bodyRegionId "${bodyRegionId}".`);
-        return;
-      }
 
       updatePhotoFromBody(photo, body);
       persistPhotos();

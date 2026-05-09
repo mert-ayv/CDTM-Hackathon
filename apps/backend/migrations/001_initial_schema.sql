@@ -108,12 +108,21 @@ create table if not exists environment_snapshots (
   longitude numeric,
   weather jsonb,
   pollen jsonb,
+  provider text,
+  source_url text,
+  linked_diary_entry_id text references diary_entries(id) on delete set null,
+  symptom_context jsonb,
+  notes text,
   source text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists environment_snapshots_user_captured_at_idx
   on environment_snapshots (user_id, captured_at desc);
+
+create index if not exists environment_snapshots_symptom_context_idx
+  on environment_snapshots using gin (symptom_context);
 
 create table if not exists context_events (
   id text primary key,
