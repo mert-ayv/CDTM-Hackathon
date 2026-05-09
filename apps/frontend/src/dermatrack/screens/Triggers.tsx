@@ -45,7 +45,8 @@ function isoFromLocal(value: string) {
 }
 
 function dayKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function averageSeverity(entry: FlareLogEntry) {
@@ -58,6 +59,12 @@ function severityTone(severity: number) {
   if (severity >= 4) return "oklch(0.78 0.12 70)";
   if (severity > 0) return "var(--sage-d)";
   return "var(--line)";
+}
+
+function flarePatternTone(severity: number) {
+  if (severity >= 7) return "oklch(0.62 0.18 25)";
+  if (severity > 0) return "oklch(0.78 0.16 68)";
+  return "color-mix(in oklch, var(--line) 54%, transparent)";
 }
 
 function triggerMetricLabel(trigger: TriggerSignal) {
@@ -92,6 +99,55 @@ function triggerCounts(entries: FlareLogEntry[]) {
   return Array.from(counts.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
+function topTriggerInsights(entries: FlareLogEntry[]) {
+  const signals = new Map<
+    string,
+    { label: string; category: TriggerCategory; count: number; windows: Set<string>; severitySum: number }
+  >();
+
+  entries.forEach((entry) => {
+    const severity = averageSeverity(entry);
+    entry.triggers.forEach((trigger) => {
+      const key = `${trigger.category}:${trigger.label.toLowerCase()}`;
+      const current = signals.get(key) ?? {
+        label: trigger.label,
+        category: trigger.category,
+        count: 0,
+        windows: new Set<string>(),
+        severitySum: 0,
+      };
+      current.count += 1;
+      current.severitySum += severity;
+      current.windows.add(trigger.window);
+      signals.set(key, current);
+    });
+  });
+
+  const ranked = Array.from(signals.values()).map((signal) => {
+    const avgSeverity = signal.count ? signal.severitySum / signal.count : 0;
+    return {
+      ...signal,
+      avgSeverity,
+      score: signal.count * Math.max(avgSeverity, 1),
+    };
+  });
+  const maxScore = Math.max(1, ...ranked.map((signal) => signal.score));
+
+  return ranked
+    .map((signal) => ({
+      ...signal,
+      confidence: Math.min(96, Math.max(42, Math.round((signal.score / maxScore) * 92))),
+    }))
+    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+}
+
+function lagLabel(windows: Set<string>) {
+  if (windows.has("12-24h")) return "~24h";
+  if (windows.has("6-12h")) return "~12h";
+  if (windows.has("0-6h")) return "~6h";
+  return "unknown";
+}
+
 function groupLogsByDay(entries: FlareLogEntry[]) {
   return entries.reduce<Record<string, FlareLogEntry[]>>((acc, entry) => {
     const key = dayKey(new Date(entry.observedAt));
@@ -100,24 +156,43 @@ function groupLogsByDay(entries: FlareLogEntry[]) {
   }, {});
 }
 
-function monthDays(reference: Date) {
-  const first = new Date(reference.getFullYear(), reference.getMonth(), 1);
-  const startOffset = (first.getDay() + 6) % 7;
-  const start = new Date(reference.getFullYear(), reference.getMonth(), 1 - startOffset);
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return date;
+function addDays(date: Date, delta: number) {
+  const next = new Date(date);
+  next.setDate(date.getDate() + delta);
+  return next;
+}
+
+function triggerTone(category: TriggerCategory) {
+  if (category === "food") return "oklch(0.78 0.16 68)";
+  if (category === "sleep") return "oklch(0.62 0.14 285)";
+  if (category === "stress") return "oklch(0.64 0.18 24)";
+  if (category === "activity") return "var(--sage-d)";
+  if (category === "clothing") return "oklch(0.64 0.13 215)";
+  if (category === "care") return "oklch(0.70 0.13 150)";
+  return "oklch(0.68 0.08 82)";
+}
+
+function windowDays(start: Date, count = 14) {
+  return Array.from({ length: count }, (_, index) => {
+    return addDays(start, index);
   });
 }
 
-function addMonths(date: Date, delta: number) {
-  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+function dateFromDayKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function daysInMonth(reference: Date) {
-  const last = new Date(reference.getFullYear(), reference.getMonth() + 1, 0).getDate();
-  return Array.from({ length: last }, (_, index) => new Date(reference.getFullYear(), reference.getMonth(), index + 1));
+function currentWindowStart() {
+  return addDays(new Date(), -13);
+}
+
+function formatRangeTitle(days: Date[]) {
+  const first = days[0] ?? new Date();
+  const last = days[days.length - 1] ?? first;
+  const firstLabel = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(first);
+  const lastLabel = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(last);
+  return `${firstLabel} - ${lastLabel}`;
 }
 
 function triggerPresentOnDay(logs: FlareLogEntry[], label: string) {
@@ -134,7 +209,8 @@ function metricInputStyle() {
 export function Triggers({ onRoute }: ScreenProps) {
   const [logs, setLogs] = useState<FlareLogEntry[]>(() => loadFlareLogs());
   const [view, setView] = useState<View>("calendar");
-  const [month, setMonth] = useState(() => new Date());
+  const [windowStart, setWindowStart] = useState(() => currentWindowStart());
+  const [selectedDay, setSelectedDay] = useState(() => dayKey(new Date()));
   const [draft, setDraft] = useState<FlareLogEntry | null>(null);
 
   useEffect(() => {
@@ -146,11 +222,19 @@ export function Triggers({ onRoute }: ScreenProps) {
   }, []);
 
   const logsByDay = useMemo(() => groupLogsByDay(logs), [logs]);
-  const days = useMemo(() => monthDays(month), [month]);
-  const matrixDays = useMemo(() => daysInMonth(month), [month]);
+  const stripDays = useMemo(() => windowDays(windowStart, 14), [windowStart]);
+  const matrixDays = stripDays;
+  const windowLogCount = useMemo(() => stripDays.reduce((sum, day) => sum + (logsByDay[dayKey(day)]?.length ?? 0), 0), [logsByDay, stripDays]);
   const counts = useMemo(() => triggerCounts(logs), [logs]);
   const matrixTriggers = counts.slice(0, 4);
-  const monthTitle = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(month);
+  const topTriggers = useMemo(() => topTriggerInsights(logs).slice(0, 5), [logs]);
+  const rangeTitle = formatRangeTitle(stripDays);
+  const selectedDayLogs = logsByDay[selectedDay] || [];
+
+  const goToWindow = (start: Date, selected = start) => {
+    setWindowStart(start);
+    setSelectedDay(dayKey(selected));
+  };
 
   const openLog = (log: FlareLogEntry) => {
     setDraft(log);
@@ -406,17 +490,17 @@ export function Triggers({ onRoute }: ScreenProps) {
         <div className="card" style={{ overflow: "hidden" }}>
           <div className="card-head">
             <div>
-              <h3>{monthTitle}</h3>
-              <span className="head-sub">{logs.length} logged flare(s)</span>
+              <h3>{rangeTitle}</h3>
+              <span className="head-sub">{windowLogCount} logged flare(s)</span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => setMonth(addMonths(month, -1))}>
+              <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => goToWindow(addDays(windowStart, -14))}>
                 <Icon.chev size={15} style={{ transform: "rotate(180deg)" }} />
               </button>
-              <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => setMonth(new Date())}>
+              <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => goToWindow(currentWindowStart(), new Date())}>
                 <Icon.pulse size={15} />
               </button>
-              <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => setMonth(addMonths(month, 1))}>
+              <button className="icon-btn" style={{ width: 34, height: 34 }} onClick={() => goToWindow(addDays(windowStart, 14))}>
                 <Icon.chev size={15} />
               </button>
             </div>
@@ -425,6 +509,7 @@ export function Triggers({ onRoute }: ScreenProps) {
           <div className="card-pad" style={{ display: "grid", gap: 18 }}>
             <div
               style={{
+                order: 3,
                 borderRadius: 18,
                 border: "1px solid var(--line-2)",
                 background: "color-mix(in oklch, var(--ink) 4%, var(--card))",
@@ -433,11 +518,20 @@ export function Triggers({ onRoute }: ScreenProps) {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 12 }}>
-                <div style={{ fontSize: 15, fontWeight: 900 }}>Trigger pattern · {monthTitle}</div>
-                <div style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--ink-3)", fontWeight: 800 }}>
-                  <span>Mild</span>
-                  <span>Heavy</span>
-                  <span>Trigger present</span>
+                <div style={{ fontSize: 15, fontWeight: 900 }}>Trigger pattern · {rangeTitle}</div>
+                <div style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--ink-3)", fontWeight: 800, flexWrap: "wrap" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <i style={{ width: 10, height: 10, borderRadius: 3, background: "oklch(0.78 0.16 68)" }} />
+                    Mild
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <i style={{ width: 10, height: 10, borderRadius: 3, background: "oklch(0.62 0.18 25)" }} />
+                    Heavy
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <i style={{ width: 10, height: 10, borderRadius: 3, background: "var(--sage-d)" }} />
+                    Trigger present
+                  </span>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "104px 1fr", gap: 10 }}>
@@ -450,7 +544,7 @@ export function Triggers({ onRoute }: ScreenProps) {
                   ))}
                 </div>
                 {matrixTriggers.map((trigger) => (
-                  <>
+                  <div key={`${trigger.category}-${trigger.label}`} style={{ display: "contents" }}>
                     <div key={`${trigger.label}-label`} style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 850, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {trigger.label}
                     </div>
@@ -464,14 +558,14 @@ export function Triggers({ onRoute }: ScreenProps) {
                             style={{
                               height: 18,
                               borderRadius: 4,
-                              background: present ? "var(--sage-d)" : "color-mix(in oklch, var(--line) 54%, transparent)",
+                              background: present ? triggerTone(trigger.category) : "color-mix(in oklch, var(--line) 54%, transparent)",
                               opacity: present ? 1 : 0.42,
                             }}
                           />
                         );
                       })}
                     </div>
-                  </>
+                  </div>
                 ))}
                 <div style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 850 }}>Flare</div>
                 <div style={{ display: "grid", gridTemplateColumns: `repeat(${matrixDays.length}, minmax(18px, 1fr))`, gap: 4 }}>
@@ -484,7 +578,7 @@ export function Triggers({ onRoute }: ScreenProps) {
                         style={{
                           height: 18,
                           borderRadius: 4,
-                          background: dayLogs.length ? severityTone(severity) : "color-mix(in oklch, var(--line) 54%, transparent)",
+                          background: dayLogs.length ? flarePatternTone(severity) : "color-mix(in oklch, var(--line) 54%, transparent)",
                           opacity: dayLogs.length ? 1 : 0.42,
                         }}
                       />
@@ -494,83 +588,239 @@ export function Triggers({ onRoute }: ScreenProps) {
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: 18 }}>
-              <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                  <div key={day} style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 900, textAlign: "center", textTransform: "uppercase" }}>
-                    {day}
-                  </div>
-                ))}
+            <div className="card" style={{ order: 1, padding: 14 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 10,
+                  padding: "0 4px",
+                }}
+              >
+                <div className="stat-label">Flare log · 14 days</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>Tap to open day</div>
               </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 8 }}>
-                {days.map((day) => {
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${stripDays.length}, 1fr)`, gap: 6 }}>
+                {stripDays.map((day) => {
                   const key = dayKey(day);
                   const dayLogs = logsByDay[key] || [];
-                  const inMonth = day.getMonth() === month.getMonth();
+                  const isSelected = selectedDay === key;
+                  const isToday = key === dayKey(new Date());
                   const maxSeverity = dayLogs.length ? Math.max(...dayLogs.map(averageSeverity)) : 0;
-                  const activeColor = severityTone(maxSeverity);
+                  const color = severityTone(maxSeverity);
 
                   return (
-                    <div
+                    <button
                       key={key}
+                      onClick={() => setSelectedDay(key)}
                       style={{
-                        minHeight: 104,
-                        borderRadius: 16,
-                        border: "1px solid " + (dayLogs.length ? activeColor : "var(--line-2)"),
-                        background: dayLogs.length
-                          ? `linear-gradient(180deg, color-mix(in oklch, ${activeColor} 18%, var(--card)), var(--card))`
-                          : inMonth
-                          ? "var(--card)"
-                          : "color-mix(in oklch, var(--bg-2) 70%, var(--card))",
-                        padding: 10,
-                        color: inMonth ? "var(--ink)" : "var(--ink-3)",
-                        display: "grid",
-                        alignContent: "start",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
                         gap: 6,
+                        padding: "10px 4px 8px",
+                        borderRadius: 12,
+                        border: "1px solid " + (isSelected ? "var(--ink)" : "var(--line)"),
+                        background: isSelected ? "var(--ink)" : isToday ? "var(--bg-2)" : "var(--card)",
+                        color: isSelected ? "var(--bg)" : "var(--ink-2)",
+                        cursor: "pointer",
+                        position: "relative",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                        <span className="num" style={{ fontSize: 13, fontWeight: 900 }}>{day.getDate()}</span>
-                        {dayLogs.length > 0 && (
-                          <span className="pill clay" style={{ padding: "3px 7px" }}>
-                            {dayLogs.length}
-                          </span>
-                        )}
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          color: isSelected ? "var(--bg-2)" : "var(--ink-3)",
+                        }}
+                      >
+                        {new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(day).slice(0, 2)}
+                      </span>
+                      <span className="num" style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: isSelected ? "var(--bg)" : "var(--ink)" }}>
+                        {String(day.getDate()).padStart(2, "0")}
+                      </span>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          fontFamily: "var(--font-mono)",
+                          padding: "2px 6px",
+                          borderRadius: 999,
+                          background: isSelected ? "rgba(255,255,255,0.12)" : dayLogs.length ? color : "var(--line-2)",
+                          color: isSelected ? "var(--bg)" : "var(--ink)",
+                          minWidth: 26,
+                        }}
+                      >
+                        {dayLogs.length ? maxSeverity.toFixed(0) : "–"}
+                      </span>
+                      <div style={{ display: "flex", gap: 3, marginTop: 1, height: 5 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: 999, background: dayLogs.length ? (isSelected ? "var(--bg)" : "var(--clay-d)") : "transparent" }} />
+                        <span style={{ width: 5, height: 5, borderRadius: 999, background: dayLogs.some((log) => log.photos.length > 0) ? (isSelected ? "var(--bg)" : "var(--sage-d)") : "transparent" }} />
+                        <span style={{ width: 5, height: 5, borderRadius: 999, background: dayLogs.some((log) => log.triggers.length > 0) ? (isSelected ? "var(--bg)" : "var(--ink-2)") : "transparent" }} />
                       </div>
-
-                      {dayLogs.slice(0, 3).map((log) => (
-                        <button
-                          key={log.id}
-                          onClick={() => openLog(log)}
+                      {isToday && (
+                        <span
                           style={{
-                            border: 0,
-                            borderRadius: 999,
-                            background: severityTone(averageSeverity(log)),
-                            color: "var(--ink)",
-                            minHeight: 24,
-                            padding: "3px 7px",
-                            textAlign: "center",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 5,
-                            fontSize: 11,
-                            fontWeight: 900,
+                            position: "absolute",
+                            top: 4,
+                            right: 4,
+                            fontSize: 8,
+                            fontWeight: 700,
+                            color: isSelected ? "var(--bg)" : "var(--sage-d)",
+                            fontFamily: "var(--font-mono)",
+                            letterSpacing: "0.04em",
                           }}
                         >
-                          <span className="num">{new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date(log.observedAt))}</span>
-                          <span>{averageSeverity(log)}</span>
-                        </button>
-                      ))}
-                      {dayLogs.length > 3 && <span className="pill neutral" style={{ justifySelf: "start", fontSize: 10 }}>+{dayLogs.length - 3}</span>}
-                    </div>
+                          •
+                        </span>
+                      )}
+                    </button>
                   );
                 })}
               </div>
             </div>
 
+            <div className="card" style={{ order: 2 }}>
+              <div className="card-head">
+                <div>
+                  <h3>
+                    {new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "2-digit", month: "short" }).format(dateFromDayKey(selectedDay))}
+                  </h3>
+                  <span className="head-sub">{selectedDayLogs.length} flare(s)</span>
+                </div>
+              </div>
+              <div className="card-pad" style={{ display: "grid", gap: 10 }}>
+                {selectedDayLogs.length === 0 ? (
+                  <div style={{ padding: 16, borderRadius: 14, background: "var(--bg-2)", color: "var(--ink-3)" }}>No flares logged for this day.</div>
+                ) : (
+                  selectedDayLogs.map((log) => (
+                    <button
+                      key={log.id}
+                      onClick={() => openLog(log)}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "72px 1fr auto",
+                        gap: 12,
+                        alignItems: "center",
+                        padding: 12,
+                        border: "1px solid var(--line-2)",
+                        borderRadius: 14,
+                        background: "var(--card)",
+                        color: "var(--ink)",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div className="num" style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 800 }}>
+                        {new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date(log.observedAt))}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                          {log.regions.slice(0, 3).map((region) => (
+                            <span key={region.id} className="pill neutral">
+                              {region.regionLabel}
+                            </span>
+                          ))}
+                          {log.triggers.slice(0, 3).map((trigger) => (
+                            <span key={trigger.id} className="pill sage">
+                              {trigger.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <span className="pill clay">Severity {averageSeverity(log)}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div
+              style={{
+                order: 4,
+                borderRadius: 18,
+                border: "1px solid var(--line-2)",
+                background: "color-mix(in oklch, var(--ink) 5%, var(--card))",
+                padding: 16,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em" }}>Top triggers</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>local flare logs</div>
+              </div>
+
+              {topTriggers.length === 0 ? (
+                <div style={{ padding: 14, borderRadius: 14, background: "var(--card)", color: "var(--ink-3)" }}>
+                  No triggers logged yet.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 14 }}>
+                  {topTriggers.map((trigger, index) => {
+                    const color = triggerTone(trigger.category);
+                    return (
+                      <div
+                        key={`${trigger.category}-${trigger.label}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "44px minmax(0, 1fr) 180px 54px",
+                          gap: 14,
+                          alignItems: "center",
+                        }}
+                      >
+                        <div className="num" style={{ fontSize: 14, color: "var(--ink-3)", fontWeight: 800 }}>
+                          {String(index + 1).padStart(2, "0")}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <strong style={{ fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{trigger.label}</strong>
+                            <span
+                              style={{
+                                flex: "0 0 auto",
+                                borderRadius: 8,
+                                padding: "3px 8px",
+                                background: "color-mix(in oklch, " + color + " 18%, var(--card))",
+                                color,
+                                fontWeight: 850,
+                                fontSize: 12,
+                              }}
+                            >
+                              {CATEGORY_LABELS[trigger.category]}
+                            </span>
+                          </div>
+                          <div style={{ marginTop: 3, color: "var(--ink-2)", fontSize: 13, fontWeight: 700 }}>
+                            Lag {lagLabel(trigger.windows)} +{trigger.avgSeverity.toFixed(1)} severity - {trigger.count} case{trigger.count === 1 ? "" : "s"}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            height: 6,
+                            borderRadius: 999,
+                            background: "color-mix(in oklch, var(--ink) 14%, transparent)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${trigger.confidence}%`,
+                              height: "100%",
+                              borderRadius: 999,
+                              background: color,
+                            }}
+                          />
+                        </div>
+                        <div className="num" style={{ color, fontSize: 17, fontWeight: 850, textAlign: "right" }}>
+                          {trigger.confidence}%
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
